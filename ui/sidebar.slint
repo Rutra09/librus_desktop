@@ -1,0 +1,153 @@
+import { Theme } from "style.slint";
+import { VerticalBox, HorizontalBox, Button } from "std-widgets.slint";
+
+component NavButton inherits Rectangle {
+    in property <string> text;
+    in property <string> icon;
+    in property <bool> active;
+    callback clicked;
+    
+    background: active ? Theme.primary : transparent;
+    border-radius: Theme.radius;
+    height: 40px;
+
+    TouchArea {
+        clicked => { root.clicked(); }
+        width: 100%;
+        height: 100%;
+        
+        HorizontalBox {
+            padding-left: 12px;
+            padding-right: 12px;
+            spacing: 12px;
+            alignment: start;
+            
+            Text {
+                text: root.icon;
+                font-size: 16px;
+                color: active ? Theme.primary-foreground : Theme.muted-foreground;
+                vertical-alignment: center;
+            }
+            
+            Text {
+                text: root.text;
+                font-size: 14px;
+                color: active ? Theme.primary-foreground : Theme.muted-foreground;
+                vertical-alignment: center;
+            }
+        }
+    }
+}
+
+export component Sidebar inherits Rectangle {
+    in property <int> active-page;
+    in property <string> user-name;
+    in property <string> lucky-number;
+    
+    callback navigate(int);
+    callback logout();
+    
+    background: #18181b; // zinc-900 hex
+    width: 250px; // w-64
+    height: 100%; // h-screen
+    
+    VerticalBox {
+        padding: Theme.padding;
+        spacing: Theme.gap;
+        
+        // Header
+        VerticalBox {
+            spacing: 4px;
+            Text {
+                text: "Librus";
+                font-size: 24px;
+                font-weight: 700;
+                color: #3b82f6; // blue-500
+            }
+            Text {
+                text: "Witaj, " + root.user-name;
+                font-size: 12px;
+                color: #a1a1aa; // zinc-400
+            }
+        }
+        
+        Rectangle { height: 1px; background: #27272a; } // border-zinc-800
+        
+        // Navigation
+        VerticalBox {
+            alignment: start;
+            spacing: 4px;
+            
+            NavButton {
+                text: "Dashboard";
+                icon: "🏠";
+                active: root.active-page == 1;
+                clicked => { root.navigate(1); }
+            }
+            NavButton {
+                text: "Plan zajęć";
+                icon: "📅";
+                active: root.active-page == 2;
+                clicked => { root.navigate(2); }
+            }
+            NavButton {
+                text: "Oceny";
+                icon: "🎓";
+                active: root.active-page == 3;
+                clicked => { root.navigate(3); }
+            }
+            NavButton {
+                text: "Ogłoszenia";
+                icon: "🔔";
+                active: root.active-page == 4;
+                clicked => { root.navigate(4); }
+            }
+            NavButton {
+                text: "Frekwencja";
+                icon: "📋";
+                active: root.active-page == 5;
+                clicked => { root.navigate(5); }
+            }
+            NavButton {
+                text: "Wiadomości";
+                icon: "✉️";
+                active: root.active-page == 6;
+                clicked => { root.navigate(6); }
+            }
+        }
+        
+        Rectangle { vertical-stretch: 1; } // Spacer
+        
+        // Footer (Lucky Number & Logout)
+        Rectangle { height: 1px; background: #27272a; }
+
+        VerticalBox {
+            spacing: 8px;
+            
+            // Lucky Number Card
+            Rectangle {
+                background: #27272a; // zinc-800/50
+                border-radius: Theme.radius;
+                VerticalBox {
+                    padding: 12px;
+                    Text {
+                        text: "Szczęśliwy numer";
+                        font-size: 10px;
+                        color: #71717a; // zinc-500
+                    }
+                    Text {
+                        text: root.lucky-number;
+                        font-size: 20px;
+                        font-weight: 700;
+                        color: #3b82f6;
+                    }
+                }
+            }
+            
+            Button {
+                text: "Wyloguj";
+                clicked => { root.logout(); }
+            }
+        }
+    }
+}

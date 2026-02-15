@@ -1,0 +1,74 @@
+import { VerticalBox, HorizontalBox, Button, ProgressIndicator, LineEdit } from "std-widgets.slint";
+import { Theme } from "style.slint";
+
+export component LoginView inherits Rectangle {
+    in property <string> error-message;
+    in property <bool> is-loading;
+    callback login(string, string);
+
+    background: Theme.background;
+
+    VerticalBox {
+        alignment: center;
+        
+        Rectangle {
+            background: Theme.card;
+            border-radius: Theme.radius;
+            border-width: 1px;
+            border-color: Theme.border;
+            width: 350px;
+            // height: auto;
+            
+            VerticalBox {
+                padding: 40px;
+                spacing: 20px;
+                alignment: center;
+
+                Text {
+                    text: "Librus Login";
+                    font-size: 24px;
+                    font-weight: 700;
+                    color: Theme.foreground;
+                    horizontal-alignment: center;
+                }
+                
+                email_input := LineEdit {
+                     placeholder-text: "Email";
+                     font-size: 14px;
+                     height: 40px;
+                     enabled: !root.is-loading;
+                }
+
+                password_input := LineEdit {
+                     placeholder-text: "Hasło";
+                     input-type: password;
+                     font-size: 14px;
+                     height: 40px;
+                     enabled: !root.is-loading;
+                }
+
+                if root.error-message != "" : Text {
+                    text: root.error-message;
+                    color: Theme.destructive;
+                    wrap: word-wrap;
+                    horizontal-alignment: center;
+                }
+
+                if root.is-loading : ProgressIndicator {
+                    indeterminate: true;
+                    height: 40px;
+                    width: 40px;
+                }
+
+                if !root.is-loading : Button {
+                    text: "Zaloguj";
+                    height: 40px;
+                    width: 100%;
+                    clicked => {
+                        root.login(email_input.text, password_input.text);
+                    }
+                }
+            }
+        }
+    }
+}

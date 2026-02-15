@@ -1,0 +1,267 @@
+import { VerticalBox, ListView, HorizontalBox, ScrollView, LineEdit, Button } from "std-widgets.slint";
+import { Theme } from "style.slint";
+
+export struct UIMessage {
+    id: int,
+    subject: string,
+    sender: string,
+    date: string,
+    read: bool,
+    has-attachments: bool,
+}
+
+export component MessagesView inherits Rectangle {
+    in property <[UIMessage]> messages: [];
+    in property <bool> needs-credentials: false;
+    
+    callback back();
+    callback submit-credentials(string, string);
+    
+    background: Theme.background;
+    
+    property <string> username: "";
+    property <string> password: "";
+
+    VerticalBox {
+        padding: 20px;
+        spacing: 12px;
+
+        // Header
+        HorizontalBox {
+            alignment: start;
+            Text {
+                text: "Wiadomości";
+                font-size: 24px;
+                font-weight: 700;
+                color: Theme.foreground;
+            }
+        }
+        
+        // Credentials form (shown when credentials needed)
+        if needs-credentials: Rectangle {
+            background: Theme.card;
+            border-radius: 12px;
+            
+            VerticalBox {
+                padding: 24px;
+                spacing: 16px;
+                
+                Text {
+                    text: "Konfiguracja Wiadomości";
+                    font-size: 18px;
+                    font-weight: 700;
+                    color: Theme.foreground;
+                }
+                
+                Text {
+                    text: "Aby używać wiadomości, podaj swój login i hasło Synergia.";
+                    font-size: 14px;
+                    color: Theme.muted-foreground;
+                    wrap: word-wrap;
+                }
+                
+                // Username
+                Text {
+                    text: "Login Synergia (np. 1234567u):";
+                    font-size: 12px;
+                    color: Theme.foreground;
+                }
+                
+                LineEdit {
+                    text <=> username;
+                    font-size: 14px;
+                    height: 40px;
+                }
+                
+                // Password
+                Text {
+                    text: "Hasło Synergia:";
+                    font-size: 12px;
+                    color: Theme.foreground;
+                }
+                
+                LineEdit {
+                    text <=> password;
+                    input-type: InputType.password;
+                    font-size: 14px;
+                    height: 40px;
+                }
+                
+                Button {
+                    text: "Zapisz i załaduj wiadomości";
+                    primary: true;
+                    enabled: username != "" && password != "";
+                    clicked => {
+                        root.submit-credentials(username, password);
+                    }
+                }
+            }
+        }
+
+        // Messages List (shown when credentials are set)
+        if !needs-credentials: Rectangle {
+            background: Theme.card;
+            border-radius: 12px;
+            vertical-stretch: 1;
+            
+            VerticalBox {
+                padding: 0px;
+                
+                if messages.length == 0: Text {
+                    text: "Brak wiadomości";
+                    color: Theme.muted-foreground;
+                    horizontal-alignment: center;
+                    vertical-alignment: center;
+                    vertical-stretch: 1;
+                }
+
+                if messages.length > 0: ListView {
+                    vertical-stretch: 1;
+                    for msg[idx] in messages: Rectangle {
+                        background: touch.has-hover ? Theme.muted : transparent;
+                        border-radius: 8px;
+                        
+                        // Let the container determine the height from content
+                        height: layout.preferred-height;
+
+                        touch := TouchArea {
+                            clicked => {
+                                root.request-message-details(msg.id);
+                            }
+                        }
+
+                        layout := VerticalBox {
+                            padding: 16px;
+                            spacing: 8px;
+
+                            HorizontalBox {
+                                padding: 0px;
+                                spacing: 12px;
+                                alignment: start;
+
+                                // Read indicator
+                                Rectangle {
+                                    width: 8px;
+                                    height: 8px;
+                                    border-radius: 4px;
+                                    background: msg.read ? transparent : Theme.accent;
+                                    y: (parent.height - self.height) / 2;
+                                }
+
+                                // Subject and Sender
+                                VerticalBox {
+                                    padding: 0px;
+                                    spacing: 4px;
+                                    Text {
+                                        text: msg.subject;
+                                        font-size: 16px;
+                                        font-weight: msg.read ? 400 : 700;
+                                        color: Theme.foreground;
+                                        wrap: word-wrap;
+                                    }
+
+                                    HorizontalBox {
+                                        padding: 0px;
+                                        spacing: 8px;
+                                        Text {
+                                            text: msg.sender;
+                                            font-size: 13px;
+                                            color: Theme.muted-foreground;
+                                        }
+                                        
+                                        Text {
+                                            text: "•";
+                                            font-size: 13px;
+                                            color: Theme.muted-foreground;
+                                        }
+                                        
+                                        Text {
+                                            text: msg.date;
+                                            font-size: 13px;
+                                            color: Theme.muted-foreground;
+                                        }
+                                    }
+                                }
+
+                                if msg.has-attachments: Text {
+                                    text: "📎";
+                                    font-size: 14px;
+                                    vertical-alignment: center;
+                                }
+                            }
+                            
+                            // Divider inside the item layout
+                            if idx < messages.length - 1: Rectangle {
+                                height: 1px;
+                                background: Theme.border;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // Message Details Overlay (TODO)
+    in property <string> selected-message-body: "";
+    in property <bool> showing-details: false;
+    callback request-message-details(int);
+    callback close-details();
+
+    if showing-details: Rectangle {
+        background: #000000aa;
+        
+        TouchArea { clicked => { root.close-details(); } }
+
+        Rectangle {
+            width: 85%;
+            height: 85%;
+            background: Theme.background;
+            border-radius: 16px;
+            border-width: 1px;
+            border-color: Theme.border;
+            
+            VerticalBox {
+                padding: 32px;
+                spacing: 24px;
+                
+                HorizontalBox {
+                    alignment: space-between;
+                    VerticalBox {
+                        padding: 0px;
+                        spacing: 4px;
+                        Text {
+                            text: "Szczegóły wiadomości";
+                            font-size: 24px;
+                            font-weight: 700;
+                            color: Theme.foreground;
+                        }
+                    }
+                    Button {
+                        text: "Zamknij";
+                        clicked => { root.close-details(); }
+                    }
+                }
+
+                Rectangle {
+                    height: 1px;
+                    background: Theme.border;
+                }
+                
+                ScrollView {
+                    vertical-stretch: 1;
+                    VerticalBox {
+                        padding: 0px;
+                        Text {
+                            text: selected-message-body;
+                            font-size: 16px;
+                            wrap: word-wrap;
+                            color: Theme.foreground;
+                            horizontal-alignment: left;
+                        }
+                    }
+                }
+            }
+        }
+    }
+}

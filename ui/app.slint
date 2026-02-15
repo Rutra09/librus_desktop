@@ -1,0 +1,154 @@
+import { Button, VerticalBox, HorizontalBox } from "std-widgets.slint";
+import { Theme } from "style.slint";
+import { Sidebar } from "sidebar.slint";
+import { LoginView } from "login.slint";
+import { DashboardView } from "dashboard.slint";
+import { TimetableView, UIDay, UILesson } from "timetable.slint";
+import { GradesView, UISubjectGrades, UIGrade } from "grades.slint";
+import { AnnouncementsView, UIAnnouncement } from "announcements.slint";
+import { AttendanceView, UIAttendance, UIAttendanceSubject } from "attendance.slint";
+import { MessagesView, UIMessage } from "messages.slint";
+
+export component MainWindow inherits Window {
+    title: "Librus Desktop";
+    // width: 1200px;
+    // height: 800px;
+    
+    background: Theme.background;
+
+    in-out property <int> active-page: 0; // 0: Login, 1: Dashboard, 2: Timetable, 3: Grades, 4: Announcements
+    in-out property <string> login-error;
+    in-out property <bool> is-logging-in: false;
+    in-out property <bool> has-synergia-credentials: false;
+    
+    // Data properties for various views
+    in-out property <string> user-name: "...";
+    in-out property <string> lucky-number: "";
+    in-out property <string> lucky-number-for: "";
+    in-out property <string> lucky-number-day: "";
+
+    // Timetable properties
+    in-out property <[UIDay]> timetable-schedule;
+    in-out property <string> timetable-week-range: "Loading...";
+
+    // Grades properties
+    in-out property <[UISubjectGrades]> grades-list;
+    
+    // Announcements properties
+    in-out property <[UIAnnouncement]> announcements-list;
+
+    callback request-login(string, string);
+    callback request-logout();
+    callback request-timetable();
+    callback request-grades();
+    callback request-announcements();
+    callback request-prev-week();
+    callback request-next-week();
+
+    // Attendance properties
+    in-out property <[UIAttendance]> attendances_list;
+    in-out property <[UIAttendanceSubject]> attendance_stats;
+    in-out property <string> attendance_frequency;
+    callback request-attendances();
+
+    // Messages properties
+    in-out property <[UIMessage]> messages-list;
+    in-out property <string> selected-message-body: "";
+    in-out property <bool> showing-details: false;
+    callback request-messages();
+    callback request-message-details(int);
+    
+    // Synergia credentials dialog
+    in-out property <bool> show-synergia-dialog: false;
+    callback submit-synergia-credentials(string, string);
+    callback skip-synergia-credentials();
+    
+    preferred-width: 1200px;
+    preferred-height: 800px;
+
+    callback add-simulated-grade(int, string, float);
+
+    HorizontalBox {
+        padding: 0px;
+        spacing: 0px;
+
+        if active-page != 0 : Sidebar {
+            active-page: active-page;
+            user-name: user-name;
+            lucky-number: lucky-number;
+            navigate(p) => {
+                active-page = p;
+                if (p == 2) { request-timetable(); }
+                if (p == 3) { request-grades(); }
+                if (p == 4) { request-announcements(); }
+                if (p == 5) { request-attendances(); }
+                if (p == 6) { request-messages(); }
+            }
+            logout => { request-logout(); }
+        }
+
+        Rectangle {
+            background: Theme.background;
+            clip: true;
+
+            if active-page == 0 : LoginView {
+                error-message: login-error;
+                is-loading: is-logging-in;
+                login(email, password) => {
+                     request-login(email, password);
+                }
+            }
+
+            if active-page == 1 : DashboardView {
+                // Dashboard no longer needs navigation callbacks as Sidebar handles them
+                // But we still pass user-name etc if dashboard displays them
+                user-name: user-name;
+                lucky-number: lucky-number;
+                lucky-number-day: lucky-number-day;
+            }
+
+            if active-page == 2 : TimetableView {
+                days: timetable-schedule;
+                week-range: timetable-week-range;
+                prev-week => { request-prev-week(); }
+                next-week => { request-next-week(); }
+            }
+            
+            if active-page == 3 : GradesView {
+                subjects: grades-list;
+                back => { active-page = 1; } // Optional now
+                add-simulated-grade(idx, val, weight) => { 
+                    root.add-simulated-grade(idx, val, weight); 
+                }
+            }
+            
+            if active-page == 4 : AnnouncementsView {
+                notices: announcements-list;
+                back => { active-page = 1; } // Optional now
+            }
+            
+            if active-page == 5 : AttendanceView {
+                attendances: attendances_list;
+                frequency-str: attendance-frequency;
+                stats: attendance_stats;
+            }
+            
+            if active-page == 6 : MessagesView {
+                messages: messages-list;
+                needs-credentials: !has-synergia-credentials;
+                selected-message-body: selected-message-body;
+                showing-details: showing-details;
+                submit-credentials(username, password) => {
+                    root.submit-synergia-credentials(username, password);
+                }
+                request-message-details(id) => {
+                    root.request-message-details(id);
+                }
+                close-details() => {
+                    root.showing-details = false;
+                }
+                back => { active-page = 1; }
+            }
+        }
+    }
+}

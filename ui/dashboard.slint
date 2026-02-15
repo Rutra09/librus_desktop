@@ -1,0 +1,89 @@
+import { VerticalBox, HorizontalBox } from "std-widgets.slint";
+import { Theme } from "style.slint";
+
+export component DashboardView inherits Rectangle {
+    in property <string> user-name;
+    in property <string> lucky-number;
+    in property <string> lucky-number-day;
+
+    background: Theme.background;
+
+    VerticalBox {
+        padding: Theme.padding;
+        spacing: Theme.gap;
+        alignment: start;
+        
+        Text {
+            text: "Dashboard";
+            font-size: 24px;
+            font-weight: 700;
+            color: Theme.foreground;
+        }
+        
+        HorizontalBox {
+             spacing: Theme.gap;
+             alignment: start;
+             
+             // Welcome Card
+             Rectangle {
+                 background: Theme.card;
+                 border-radius: Theme.radius;
+                 border-width: 1px;
+                 border-color: Theme.border;
+                 width: 300px;
+                 height: 120px;
+                 
+                 VerticalBox {
+                     padding: Theme.padding;
+                     spacing: 4px;
+                     alignment: center;
+                     Text {
+                         text: "Witaj!";
+                         font-size: 20px;
+                         font-weight: 700;
+                         color: Theme.foreground;
+                     }
+                     Text {
+                         text: root.user-name;
+                         font-size: 16px;
+                         color: Theme.muted-foreground;
+                     }
+                 }
+             }
+
+             // Lucky Number Card
+             Rectangle {
+                 background: Theme.card;
+                 border-radius: Theme.radius;
+                 border-width: 1px;
+                 border-color: Theme.border;
+                 width: 200px;
+                 height: 120px;
+                 
+                 VerticalBox {
+                     padding: Theme.padding;
+                     spacing: 4px;
+                     alignment: center;
+                     Text {
+                         text: "Szczęśliwy Numer";
+                         font-size: 12px;
+                         color: Theme.muted-foreground;
+                     }
+                     Text {
+                         text: root.lucky-number;
+                         font-size: 36px;
+                         font-weight: 700;
+                         color: Theme.primary;
+                     }
+                     Text {
+                         text: root.lucky-number-day;
+                         font-size: 10px;
+                         color: Theme.muted-foreground;
+                     }
+                 }
+             }
+        }
+        
+        Rectangle { vertical-stretch: 1; }
+    }
+}

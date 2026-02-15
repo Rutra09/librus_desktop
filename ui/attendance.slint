@@ -1,0 +1,234 @@
+import { Theme } from "style.slint";
+import { ListView } from "std-widgets.slint";
+
+export struct UIAttendance {
+    id: string,
+    date: string,
+    type_name: string,
+    subject: string,
+    lesson_no: int,
+    color: color,
+    symbol: string,
+    topic: string,
+}
+
+component AttendanceItem inherits Rectangle {
+    in property <UIAttendance> attendance;
+    height: 60px;
+    background: Theme.card;
+    border-radius: 8px;
+    
+    HorizontalLayout {
+        padding: 10px;
+        spacing: 12px;
+        alignment: center;
+        
+        // Symbol / Color Badge
+        Rectangle {
+            width: 40px;
+            height: 40px;
+            border-radius: 20px;
+            background: attendance.color;
+            
+            Text {
+                text: attendance.symbol;
+                color: Colors.white;
+                font-size: 14px;
+                font-weight: 700;
+                vertical-alignment: center;
+                horizontal-alignment: center;
+            }
+        }
+        
+        // details
+        VerticalLayout {
+            alignment: center;
+            spacing: 2px;
+            
+            Text {
+                text: attendance.type_name;
+                font-size: 14px;
+                font-weight: 600;
+                color: Theme.foreground;
+            }
+            Text {
+                text: attendance.subject + (attendance.topic != "" ? " - " + attendance.topic : "");
+                font-size: 12px;
+                color: Theme.secondary-foreground;
+                overflow: elide;
+            }
+        }
+        
+        // Date & Lesson No
+        VerticalLayout {
+            alignment: center;
+            spacing: 2px;
+            horizontal-stretch: 0;
+            
+            Text {
+                text: attendance.date;
+                font-size: 12px;
+                color: Theme.secondary-foreground;
+                horizontal-alignment: right;
+            }
+            Text {
+                text: "Lekcja " + attendance.lesson_no;
+                font-size: 11px;
+                color: Theme.accent;
+                horizontal-alignment: right;
+            }
+        }
+    }
+}
+
+export struct UIAttendanceSubject {
+    id: int,
+    name: string,
+    presence_count: int,
+    absence_unexcused_count: int,
+    absence_excused_count: int,
+    late_count: int,
+    total_count: int,
+    frequency: string, // "95%"
+}
+
+component FrequencyTable inherits Rectangle {
+    in property <[UIAttendanceSubject]> subjects;
+    
+    VerticalLayout {
+        spacing: 0px;
+        
+        // Header
+        Rectangle {
+            height: 40px;
+            background: Theme.background;
+            HorizontalLayout {
+                padding: 10px;
+                spacing: 1px;
+                Text { text: "Przedmiot"; width: 35%; font-weight: 700; color: Theme.foreground; overflow: elide; }
+                Text { text: "%"; width: 13%; font-weight: 700; color: Theme.foreground; horizontal-alignment: center; }
+                Text { text: "Ob."; width: 13%; font-weight: 700; color: Theme.foreground; horizontal-alignment: center; }
+                Text { text: "Nb."; width: 13%; font-weight: 700; color: Theme.foreground; horizontal-alignment: center; }
+                Text { text: "Usp."; width: 13%; font-weight: 700; color: Theme.foreground; horizontal-alignment: center; }
+                Text { text: "Sp."; width: 13%; font-weight: 700; color: Theme.foreground; horizontal-alignment: center; }
+            }
+        }
+        
+        ListView {
+            for subj[index] in root.subjects : Rectangle {
+                height: 40px;
+                background: index / 2 == 0 ? Theme.card : Theme.background; // Stripes
+                
+                HorizontalLayout {
+                    padding: 10px;
+                    spacing: 1px;
+                    Text { text: subj.name; width: 35%; color: Theme.foreground; overflow: elide; vertical-alignment: center; }
+                    Text { text: subj.frequency; width: 13%; color: Theme.primary; font-weight: 700; horizontal-alignment: center; vertical-alignment: center; }
+                    Text { text: subj.presence_count; width: 13%; color: #4caf50; horizontal-alignment: center; vertical-alignment: center; } // Green
+                    Text { text: subj.absence_unexcused_count; width: 13%; color: #f44336; horizontal-alignment: center; vertical-alignment: center; } // Red
+                    Text { text: subj.absence_excused_count; width: 13%; color: #2196f3; horizontal-alignment: center; vertical-alignment: center; } // Blue
+                    Text { text: subj.late_count; width: 13%; color: #ff9800; horizontal-alignment: center; vertical-alignment: center; } // Orange
+                }
+            }
+        }
+    }
+}
+
+export component AttendanceView inherits Rectangle {
+    in property <[UIAttendance]> attendances;
+    in property <[UIAttendanceSubject]> stats;
+    in property <string> frequency_str; // "95.5%"
+    in property <string> semester_name: "Semestr 1";
+    
+    // Tabs state
+    in-out property <int> active_tab: 0; // 0: List, 1: Stats
+    
+    VerticalLayout {
+        spacing: 0px;
+        padding: 0px;
+        
+        // Tab Bar
+        Rectangle {
+            height: 50px;
+            background: Theme.card;
+            
+            HorizontalLayout {
+                padding: 10px;
+                spacing: 20px;
+                alignment: center;
+                
+                // Tab 1: Lista
+                Rectangle {
+                    width: 120px;
+                    border-radius: 8px;
+                    background: root.active_tab == 0 ? Theme.background : Colors.transparent;
+                    animate background { duration: 200ms; }
+                    
+                    TouchArea {
+                        clicked => { root.active_tab = 0; }
+                    }
+                    
+                    Text {
+                        text: "Lista";
+                        color: root.active_tab == 0 ? Theme.foreground : Theme.secondary-foreground;
+                        font-weight: root.active_tab == 0 ? 700 : 400;
+                        horizontal-alignment: center;
+                        vertical-alignment: center;
+                    }
+                }
+                
+                // Tab 2: Statystyki
+                Rectangle {
+                    width: 120px;
+                    border-radius: 8px;
+                    background: root.active_tab == 1 ? Theme.background : Colors.transparent;
+                    animate background { duration: 200ms; }
+                    
+                    TouchArea {
+                        clicked => { root.active_tab = 1; }
+                    }
+                    
+                    Text {
+                        text: "Statystyki";
+                        color: root.active_tab == 1 ? Theme.foreground : Theme.secondary-foreground;
+                        font-weight: root.active_tab == 1 ? 700 : 400;
+                        horizontal-alignment: center;
+                        vertical-alignment: center;
+                    }
+                }
+            }
+        }
+        
+        // Content
+        Rectangle {
+            // Tab 0: List
+            if root.active_tab == 0 : VerticalLayout {
+                spacing: 16px;
+                padding: 20px;
+                
+                // Header (Total Freq)
+                HorizontalLayout {
+                    height: 40px;
+                    spacing: 20px;
+                    Text { text: "Razem:"; font-size: 24px; font-weight: 700; color: Theme.foreground; vertical-alignment: center; }
+                    Text { text: root.frequency_str; font-size: 24px; font-weight: 700; color: Theme.primary; vertical-alignment: center; }
+                    Rectangle { horizontal-stretch: 1; }
+                }
+                
+                ListView {
+                    for att in root.attendances : AttendanceItem {
+                        attendance: att;
+                        width: parent.width;
+                    }
+                }
+            }
+            
+            // Tab 1: Stats
+            if root.active_tab == 1 : FrequencyTable {
+                subjects: root.stats;
+                width: parent.width;
+                height: parent.height; // Fill
+            }
+        }
+    }
+}

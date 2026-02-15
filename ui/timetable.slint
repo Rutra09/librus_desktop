@@ -1,0 +1,302 @@
+import { VerticalBox, HorizontalBox, Button, ScrollView } from "std-widgets.slint";
+import { Theme } from "style.slint";
+
+export struct UILesson {
+    id: int,
+    no: int,
+    subject: string,
+    teacher: string,
+    room: string,
+    color: brush,
+    is_substitution: bool,
+    is_canceled: bool,
+    hour_from: string,
+    hour_to: string,
+    event_content: string,
+    event_category: string,
+    substitution_desc: string,
+}
+
+export struct UIDay {
+    date: string,
+    name: string,
+    lessons: [UILesson],
+}
+
+component LessonPopover inherits Rectangle {
+    in property <bool> open;
+    in property <UILesson> lesson;
+    callback close;
+
+    visible: open;
+    
+    // Backdrop with fade
+    TouchArea {
+        width: 100%;
+        height: 100%;
+        clicked => { root.close(); }
+    }
+    Rectangle {
+        background: #00000080;
+        width: 100%;
+        height: 100%;
+        opacity: open ? 1.0 : 0.0;
+        animate opacity { duration: 200ms; }
+    }
+
+    // Popover Content
+    Rectangle {
+        width: 320px;
+        height: 400px; 
+        background: Theme.popover;
+        border-radius: Theme.radius;
+        border-width: 1px;
+        border-color: Theme.border;
+        
+        // Centering
+        x: (parent.width - self.width) / 2;
+        y: (parent.height - self.height) / 2;
+
+        // Animate
+        opacity: open ? 1.0 : 0.0;
+        animate opacity { duration: 200ms; easing: ease-out; }
+        
+        TouchArea {}
+
+        VerticalBox {
+            padding: Theme.padding;
+            spacing: Theme.gap;
+            alignment: start;
+
+            // Header
+            Text {
+                text: "Szczegóły lekcji";
+                font-size: 13px;
+                color: Theme.muted-foreground;
+            }
+            
+            Text {
+                text: root.lesson.subject;
+                font-size: 20px;
+                font-weight: 700;
+                color: Theme.foreground;
+                wrap: word-wrap;
+            }
+
+            if root.lesson.is_substitution : Rectangle {
+                background: #854d0e; 
+                border-radius: Theme.radius;
+                height: sub-layout.preferred-height + 16px;
+                vertical-stretch: 0;
+                
+                sub-layout := VerticalBox {
+                    padding: 8px;
+                    spacing: 2px;
+                    Text { text: "Zastępstwo"; font-size: 11px; color: #fcd34d; font-weight: 700; } // amber-300
+                    if root.lesson.substitution_desc != "" : Text { 
+                        text: root.lesson.substitution_desc; 
+                        font-size: 12px; 
+                        color: Theme.foreground; 
+                        wrap: word-wrap;
+                    }
+                }
+            }
+
+            if root.lesson.event_content != "" : Rectangle {
+                background: Theme.accent;
+                border-radius: Theme.radius;
+                height: evt-layout.preferred-height + 16px;
+                vertical-stretch: 0;
+                
+                evt-layout := VerticalBox {
+                    padding: 8px;
+                    spacing: 4px;
+                    Text {
+                        text: root.lesson.event_category != "" ? root.lesson.event_category : "Wydarzenie";
+                        font-weight: 600;
+                        font-size: 12px;
+                        color: Theme.foreground;
+                    }
+                    Text {
+                        text: root.lesson.event_content;
+                        wrap: word-wrap;
+                        font-size: 13px;
+                        color: Theme.foreground;
+                    }
+                }
+            }
+
+            // Details
+            VerticalBox {
+                spacing: 4px;
+                Text {
+                    text: root.lesson.hour_from + " - " + root.lesson.hour_to;
+                    color: Theme.muted-foreground;
+                    font-size: 14px;
+                }
+                Text {
+                     text: "Nauczyciel: " + root.lesson.teacher;
+                     color: Theme.muted-foreground;
+                     font-size: 13px;
+                     wrap: word-wrap;
+                }
+                Text {
+                     text: "Sala: " + root.lesson.room;
+                     color: Theme.muted-foreground;
+                     font-size: 13px;
+                }
+            }
+            
+            Rectangle { vertical-stretch: 1; } // Spacer
+            
+            Button {
+                text: "Zamknij";
+                clicked => { root.close(); }
+            }
+        }
+    }
+}
+
+component LessonItem inherits Rectangle {
+    in property <UILesson> lesson;
+    callback clicked;
+    
+    background: lesson.is_canceled ? #7f1d1d : (lesson.is_substitution ? #854d0e : Theme.card); 
+    border-radius: Theme.radius;
+    border-width: 1px;
+    border-color: Theme.border;
+
+    TouchArea {
+        clicked => { root.clicked(); }
+        width: 100%;
+        height: 100%;
+    }
+    
+    VerticalBox {
+        padding: 8px;
+        spacing: 4px;
+        
+        Text {
+            text: lesson.subject;
+            font-weight: 700;
+            font-size: 13px;
+            color: Theme.foreground;
+            overflow: elide;
+        }
+        Text {
+            text: lesson.hour_from + " - " + lesson.hour_to;
+            font-size: 11px;
+            color: Theme.muted-foreground;
+        }
+        HorizontalBox {
+             Text {
+                 text: lesson.teacher;
+                 font-size: 11px;
+                 color: Theme.muted-foreground;
+                 overflow: elide;
+                 horizontal-stretch: 1;
+             }
+             Text {
+                 text: lesson.room == "" ? "" : "[" + lesson.room + "]";
+                 font-size: 11px;
+                 color: Theme.muted-foreground;
+             }
+        }
+        
+        if lesson.event_content != "" : Rectangle {
+            background: Theme.accent;
+            border-radius: 4px;
+            height: 16px; // Indicator
+            vertical-stretch: 0;
+            Text {
+                 text: "!";
+                 color: Theme.foreground;
+                 font-weight: 700;
+                 x: 4px; y: 0px;
+            }
+        }
+    }
+}
+
+export component TimetableView inherits Rectangle {
+    in property <[UIDay]> days;
+    in property <string> week_range: "Loading...";
+    callback prev_week();
+    callback next_week();
+
+    background: Theme.background;
+    
+    property <bool> overlay_open: false;
+    property <UILesson> selected_lesson;
+
+    VerticalBox {
+        padding: Theme.padding;
+        spacing: Theme.gap;
+
+        // Header
+        HorizontalBox {
+            alignment: center;
+            spacing: Theme.gap;
+            vertical-stretch: 0;
+            Button {
+                text: "<";
+                width: 40px;
+                clicked => { root.prev_week(); }
+            }
+            Text {
+                text: root.week_range;
+                font-size: 18px;
+                color: Theme.foreground;
+                vertical-alignment: center;
+            }
+            Button {
+                text: ">";
+                width: 40px;
+                clicked => { root.next_week(); }
+            }
+        }
+
+        // Days Grid
+        ScrollView {
+            HorizontalBox {
+                spacing: Theme.gap;
+                alignment: start;
+                for day in root.days : VerticalBox {
+                    width: 200px;
+                    spacing: 8px;
+                    alignment: start;
+
+                    // Day Header
+                    Rectangle {
+                        height: 36px;
+                        background: Theme.muted;
+                        border-radius: Theme.radius;
+                        vertical-stretch: 0;
+                        Text {
+                            text: day.name + " " + day.date;
+                            horizontal-alignment: center;
+                            vertical-alignment: center;
+                            font-weight: 600;
+                            color: Theme.muted-foreground;
+                        }
+                    }
+
+                    // Lessons
+                    for lesson in day.lessons : LessonItem {
+                        lesson: lesson;
+                        clicked => {
+                            root.selected_lesson = lesson;
+                            root.overlay_open = true;
+                        }
+                    }
+                }
+            }
+        }
+    }
+    
+    LessonPopover {
+        open: root.overlay_open;
+        lesson: root.selected_lesson;
+        close => { root.overlay_open = false; }
+    }
+}
