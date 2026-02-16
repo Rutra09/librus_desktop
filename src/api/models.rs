@@ -376,6 +376,14 @@ pub struct Event {
     pub created_by: Option<IdRef>,
     #[serde(alias = "Class")]
     pub class: Option<IdRef>,
+    
+    // Transient fields for scraped data
+    #[serde(skip)]
+    pub scraped_subject: Option<String>,
+    #[serde(skip)]
+    pub scraped_teacher: Option<String>,
+    #[serde(skip)]
+    pub scraped_category: Option<String>,
 }
 
 fn deserialize_id<'de, D>(deserializer: D) -> Result<Option<i64>, D::Error>
@@ -418,6 +426,22 @@ pub struct EventType {
     pub id: Option<i64>,
     #[serde(alias = "Name")]
     pub name: Option<String>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct HomeworkCategoryResponse {
+    #[serde(alias = "Categories")]
+    pub categories: Option<Vec<HomeworkCategory>>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct HomeworkCategory {
+    #[serde(alias = "Id")]
+    pub id: Option<i64>,
+    #[serde(alias = "Name")]
+    pub name: Option<String>,
+    #[serde(alias = "Color")]
+    pub color: Option<IdRef>,
 }
 
 // ---------------------------------------------------------------------------

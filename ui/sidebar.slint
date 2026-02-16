@@ -46,6 +46,7 @@ export component Sidebar inherits Rectangle {
     
     callback navigate(int);
     callback logout();
+    callback refresh();
     
     background: #18181b; // zinc-900 hex
     width: 250px; // w-64
@@ -114,6 +115,12 @@ export component Sidebar inherits Rectangle {
                 active: root.active-page == 6;
                 clicked => { root.navigate(6); }
             }
+            NavButton {
+                text: "Zadania domowe";
+                icon: "📝";
+                active: root.active-page == 7;
+                clicked => { root.navigate(7); }
+            }
         }
         
         Rectangle { vertical-stretch: 1; } // Spacer
@@ -144,6 +151,11 @@ export component Sidebar inherits Rectangle {
                 }
             }
             
+            Button {
+                text: "Odśwież dane";
+                clicked => { root.refresh(); }
+            }
+
             Button {
                 text: "Wyloguj";
                 clicked => { root.logout(); }

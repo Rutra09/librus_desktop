@@ -27,6 +27,9 @@ pub struct AuthState {
     // Messages session
     pub messages_session_id: Option<String>,
     pub messages_session_expiry: Option<i64>,
+    
+    // Synergia session (for scraping)
+    pub synergia_cookie: Option<String>,
 }
 
 impl AuthState {
@@ -93,6 +96,7 @@ pub async fn login_portal(
         synergia_password: None,  // Will be set later by user
         messages_session_id: None,
         messages_session_expiry: None,
+        synergia_cookie: None,
     })
 }
 

@@ -212,10 +212,188 @@ impl LibrusClient {
         }
     }
 
+    /// Fetch homework entries.
+    /// 
+    /// `date_from` and `date_to` are optional. If not provided, defaults to current week or similar by API.
+    pub async fn fetch_homework(&self, _date_from: Option<&str>, _date_to: Option<&str>) -> Result<Vec<crate::api::models::Event>> {
+        let endpoint = "HomeWorks".to_string();
+        
+        // if let (Some(from), Some(to)) = (date_from, date_to) {
+        //     endpoint = format!("HomeWorks?dateFrom={}&dateTo={}", from, to);
+        // } else if let Some(from) = date_from {
+        //     endpoint = format!("HomeWorks?dateFrom={}", from);
+        // }
+        // endpoint = "HomeWorks".to_string();
+
+        let json = self.api_get(&endpoint).await?;
+        let response: crate::api::models::EventsResponse = serde_json::from_value(json)?;
+        Ok(response.homeworks.unwrap_or_default())
+    }
+
+    /// Fetch homework categories.
+    pub async fn fetch_homework_categories(&self) -> Result<Vec<crate::api::models::HomeworkCategory>> {
+        let json = self.api_get("HomeWorks/Categories").await?;
+        let response: crate::api::models::HomeworkCategoryResponse = serde_json::from_value(json)?;
+        Ok(response.categories.unwrap_or_default())
+    }
+
     /// Update messages session credentials.
-    pub async fn set_messages_session(&self, session_id: String, expiry: i64) {
+    pub async fn set_messages_session(&self, session_id: String, synergia_cookie: String, expiry: i64) {
         let mut auth = self.auth.lock().await;
         auth.messages_session_id = Some(session_id);
+        auth.synergia_cookie = Some(synergia_cookie);
         auth.messages_session_expiry = Some(expiry);
+    }
+    /// Fetch homework entries via Synergia scraping.
+    pub async fn fetch_homework_via_synergia(&self, date_from: Option<&str>, date_to: Option<&str>) -> Result<Vec<crate::api::models::Event>> {
+        let url = "https://synergia.librus.pl/moje_zadania";
+        
+        // Ensure we have a valid Synergia session
+        let synergia_cookie = self.get_synergia_session().await?;
+        
+        // Parse dates or use defaults
+        let start_date = if let Some(from) = date_from {
+            chrono::NaiveDate::parse_from_str(from, "%Y-%m-%d").unwrap_or_else(|_| chrono::Local::now().date_naive())
+        } else {
+            chrono::Local::now().date_naive()
+        };
+
+        let end_date = if let Some(to) = date_to {
+            chrono::NaiveDate::parse_from_str(to, "%Y-%m-%d").unwrap_or_else(|_| chrono::Local::now().date_naive() + chrono::Duration::days(7))
+        } else {
+            chrono::Local::now().date_naive() + chrono::Duration::days(7)
+        };
+
+        let mut events = Vec::new();
+        let mut current_start = start_date;
+        let mut id_counter = 100000;
+
+        // Loop in 28-day chunks (safe margin within 1 month)
+        while current_start < end_date {
+            let mut current_end = current_start + chrono::Duration::days(28);
+            if current_end > end_date {
+                current_end = end_date;
+            }
+
+            let from_str = current_start.format("%Y-%m-%d").to_string();
+            let to_str = current_end.format("%Y-%m-%d").to_string();
+            
+            let mut params = std::collections::HashMap::new();
+            params.insert("dataOd", from_str.as_str());
+            params.insert("dataDo", to_str.as_str());
+            params.insert("przedmiot", "-1");
+
+            // Create a new client that sends the Synergia cookie
+            let client = reqwest::Client::builder()
+                .user_agent(crate::api::constants::LIBRUS_USER_AGENT)
+                .redirect(reqwest::redirect::Policy::none()) 
+                .build()?;
+            
+            let response = client.post(url)
+                .header("Cookie", &synergia_cookie)
+                .header("Referer", "https://synergia.librus.pl/rodzic/index")
+                .header("Origin", "https://synergia.librus.pl")
+                .form(&params)
+                .send()
+                .await?;
+                
+            if !response.status().is_success() {
+                 if response.status().is_redirection() {
+                     bail!("Synergia redirected (session expired?)");
+                 }
+            } else {
+                let html = response.text().await?;
+                let document = scraper::Html::parse_document(&html);
+                let table_selector = scraper::Selector::parse("table.myHomeworkTable > tbody > tr").unwrap();
+                let td_selector = scraper::Selector::parse("td").unwrap();
+                
+                for row in document.select(&table_selector) {
+                    let cells: Vec<_> = row.select(&td_selector).collect();
+                    if cells.len() >= 10 {
+                        let subject_name = cells[0].text().collect::<String>().trim().to_string();
+                        let teacher_name = cells[1].text().collect::<String>().trim().to_string();
+                        let topic = cells[2].text().collect::<String>().trim().to_string();
+                        // cells[3] is options
+                        // cells[4] is date added?
+                        // cells[5] is options?
+                        // cells[6] is date of event?
+                        let event_date_str = cells[6].text().collect::<String>().trim().to_string();
+                        
+                        // Extract ID
+                        let input_selector = scraper::Selector::parse("input").unwrap();
+                        let mut homework_id = id_counter;
+                        if let Some(input) = cells[9].select(&input_selector).next() {
+                            if let Some(onclick) = input.value().attr("onclick") {
+                                if let Some(start) = onclick.find("/podglad/") {
+                                     let end_part = &onclick[start + 9..];
+                                     if let Some(end) = end_part.find('\'') {
+                                         if let Ok(id) = end_part[0..end].parse::<i64>() {
+                                             homework_id = id;
+                                         }
+                                     }
+                                }
+                            }
+                        }
+                        id_counter += 1;
+
+                        events.push(crate::api::models::Event {
+                            id: Some(homework_id),
+                            date: Some(event_date_str),
+                            time_from: None,
+                            lesson_no: None,
+                            content: Some(topic),
+                            category: Some(crate::api::models::IdRef { id: Some(-1) }), // -1 for scraped homework
+                            subject: Some(crate::api::models::IdRef { id: Some(0) }), // 0 for scraped subject
+                            created_by: Some(crate::api::models::IdRef { id: Some(0) }),
+                            class: None,
+                            add_date: None,
+                            scraped_subject: Some(subject_name),
+                            scraped_teacher: Some(teacher_name),
+                            scraped_category: Some("Zadanie domowe".to_string()),
+                        });
+                    }
+                }
+            }
+            
+            // Move to next chunk (inclusive logic: +1 day)
+            current_start = current_end + chrono::Duration::days(1);
+        }
+        
+        Ok(events)
+
+    }
+
+    /// Helper to get or refresh Synergia session cookie
+    async fn get_synergia_session(&self) -> Result<String> {
+        let mut auth = self.auth.lock().await;
+        
+        // Check if we have a valid session
+        let is_valid = if let Some(expiry) = auth.messages_session_expiry {
+             chrono::Utc::now().timestamp() < expiry
+        } else {
+            false
+        };
+
+        if is_valid {
+             if let Some(cookie) = &auth.synergia_cookie {
+                 return Ok(cookie.clone());
+             }
+        }
+        
+        // Login again
+        println!("[Client] Refreshing Synergia session...");
+        match super::messages_auth::login_messages(&auth).await {
+            Ok((msg_cookie, syn_cookie, expiry)) => {
+                auth.messages_session_id = Some(msg_cookie);
+                auth.synergia_cookie = Some(syn_cookie.clone());
+                auth.messages_session_expiry = Some(expiry);
+                Ok(syn_cookie)
+            }
+            Err(e) => {
+                 // Try refreshing portal token and retrying?
+                 // For now just error
+                 Err(e)
+            }
+        }
     }
 }

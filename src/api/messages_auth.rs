@@ -7,7 +7,8 @@ use super::constants::*;
 /// 
 /// Uses the API AutoLoginToken endpoint to get a Synergia token, then uses that token
 /// to access Synergia and get the messages session cookie.
-pub async fn login_messages(auth: &super::auth::AuthState) -> Result<(String, i64)> {
+/// Returns (messages_cookie, synergia_cookie, expiry)
+pub async fn login_messages(auth: &super::auth::AuthState) -> Result<(String, String, i64)> {
     println!("[Messages Auth] Starting messages authentication via AutoLoginToken...");
     
     // Step 1: Get AutoLoginToken from API
@@ -77,7 +78,18 @@ pub async fn login_messages(auth: &super::auth::AuthState) -> Result<(String, i6
     let cookies_str = cookies_header.to_str()
         .context("Failed to convert cookies to string")?;
     
-    println!("[Messages Auth] Cookies from jar: {}", cookies_str);
+    println!("[Messages Auth] Cookies for wiadomosci: {}", cookies_str);
+
+    // Also extract cookies for Synergia!
+    let url_synergia = "https://synergia.librus.pl".parse::<reqwest::Url>()
+        .context("Failed to parse synergia URL")?;
+    let synergia_cookies_header = jar.cookies(&url_synergia);
+    let synergia_cookies_str = if let Some(h) = synergia_cookies_header {
+         h.to_str().unwrap_or("").to_string()
+    } else {
+        "".to_string()
+    };
+    println!("[Messages Auth] Cookies for synergia: {}", synergia_cookies_str);
     
     // Parse DZIENNIKSID and cookiesession1 from cookie string
     let mut dzienniksid = None;
@@ -110,7 +122,7 @@ pub async fn login_messages(auth: &super::auth::AuthState) -> Result<(String, i6
             format!("DZIENNIKSID={}", dziennik_sid)
         };
         
-        return Ok((cookie_str, expiry));
+        return Ok((cookie_str, synergia_cookies_str, expiry));
     }
 
     Err(anyhow::anyhow!("DZIENNIKSID cookie not found in cookie jar"))

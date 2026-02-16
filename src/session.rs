@@ -20,6 +20,7 @@ pub struct Session {
     pub synergia_password: Option<String>,
     pub messages_session_id: Option<String>,
     pub messages_session_expiry: Option<i64>,
+    pub synergia_cookie: Option<String>,
 }
 
 pub fn get_session_path() -> Result<PathBuf> {

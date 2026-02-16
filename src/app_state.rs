@@ -1,10 +1,9 @@
 use std::sync::Arc;
 use tokio::sync::Mutex;
-use anyhow::Result;
 use std::collections::HashMap;
 
 use crate::api::client::LibrusClient;
-use crate::api::models::{MeResponse, LuckyNumber, Lesson, Grade, Announcement};
+use crate::api::models::{MeResponse, LuckyNumber, Grade};
 
 /// Global application state shared with the UI thread.
 #[derive(Clone)]
@@ -24,6 +23,8 @@ pub struct AppState {
     pub attendance_types: Arc<Mutex<HashMap<i64, crate::api::models::AttendanceType>>>,
     // Classrooms (ID -> Classroom)
     pub classrooms: Arc<Mutex<HashMap<i64, crate::api::models::Classroom>>>,
+    // Homework Categories (ID -> Category)
+    pub homework_categories: Arc<Mutex<HashMap<i64, crate::api::models::HomeworkCategory>>>,
     // Cached Grades
     pub grades: Arc<Mutex<Vec<Grade>>>,
 }
@@ -40,6 +41,7 @@ impl AppState {
             event_categories: Arc::new(Mutex::new(HashMap::new())),
             attendance_types: Arc::new(Mutex::new(HashMap::new())),
             classrooms: Arc::new(Mutex::new(HashMap::new())),
+            homework_categories: Arc::new(Mutex::new(HashMap::new())),
             grades: Arc::new(Mutex::new(Vec::new())),
         }
     }

@@ -32,6 +32,7 @@ fn session_to_auth(s: session::Session) -> AuthState {
         synergia_password: s.synergia_password,
         messages_session_id: s.messages_session_id,
         messages_session_expiry: s.messages_session_expiry,
+        synergia_cookie: s.synergia_cookie,
     }
 }
 
@@ -51,6 +52,7 @@ fn auth_to_session(a: AuthState) -> session::Session {
         synergia_password: a.synergia_password,
         messages_session_id: a.messages_session_id,
         messages_session_expiry: a.messages_session_expiry,
+        synergia_cookie: a.synergia_cookie,
     }
 }
 
@@ -103,6 +105,18 @@ async fn fetch_metadata(client: LibrusClient, state: AppState) {
             }
         }
     }
+    // 6. Event/Homework Categories (For Timetable & Homework)
+    if let Ok(cats) = client.fetch_homework_categories().await {
+        let mut hw_map = state.homework_categories.lock().await;
+        let mut ev_map = state.event_categories.lock().await;
+        for c in cats {
+            if let Some(id) = c.id {
+                let name = c.name.clone().unwrap_or("?".into());
+                hw_map.insert(id, c);
+                ev_map.insert(id, name);
+            }
+        }
+    }
 }
 
 async fn fetch_dashboard_data(client: LibrusClient, window_weak: slint::Weak<MainWindow>) {
@@ -145,12 +159,12 @@ fn hex_to_color(hex: &str) -> slint::Color {
     slint::Color::from_rgb_u8(100, 100, 100)
 }
 
-fn int_to_color(val: i32) -> slint::Color {
-    let r = ((val >> 16) & 0xFF) as u8;
-    let g = ((val >> 8) & 0xFF) as u8;
-    let b = (val & 0xFF) as u8;
-    slint::Color::from_rgb_u8(r, g, b)
-}
+// fn int_to_color(val: i32) -> slint::Color {
+//     let r = ((val >> 16) & 0xFF) as u8;
+//     let g = ((val >> 8) & 0xFF) as u8;
+//     let b = (val & 0xFF) as u8;
+//     slint::Color::from_rgb_u8(r, g, b)
+// }
 
 // Helper to parse grade value
 fn parse_grade_value(val: &str) -> Option<f32> {
@@ -332,7 +346,7 @@ async fn fetch_timetable_data(client: LibrusClient, window_weak: slint::Weak<Mai
         let parsed_days = LibrusClient::parse_timetable(&json);
         
         // Process events
-        let mut events_map: HashMap<(String, i32), Vec<String>> = HashMap::new();
+        let mut events_map: HashMap<(String, i32), Vec<(String, String)>> = HashMap::new();
         if let Ok(events) = events_res {
             let event_cats = state.event_categories.lock().await; // Lock once
             for e in events {
@@ -344,8 +358,7 @@ async fn fetch_timetable_data(client: LibrusClient, window_weak: slint::Weak<Mai
                     let content = e.content.clone().unwrap_or("".to_string());
                     
                     if !content.is_empty() {
-                         let entry = format!("[{}] {}", cat_name, content);
-                         events_map.entry((date.clone(), l_no)).or_insert(Vec::new()).push(entry);
+                         events_map.entry((date.clone(), l_no)).or_insert(Vec::new()).push((cat_name, content));
                     }
                 }
             }
@@ -378,12 +391,13 @@ async fn fetch_timetable_data(client: LibrusClient, window_weak: slint::Weak<Mai
 
                 // Lookup event
                 let lesson_no = l.lesson_no.unwrap_or(0);
-                let event_content = if let Some(evs) = events_map.get(&(date_str.clone(), lesson_no)) {
-                    evs.join("\n")
+                let (event_content, event_category) = if let Some(evs) = events_map.get(&(date_str.clone(), lesson_no)) {
+                    let contents = evs.iter().map(|(_, c)| c.clone()).collect::<Vec<_>>().join("\n");
+                    let categories = evs.iter().map(|(c, _)| c.clone()).collect::<Vec<_>>().join(", ");
+                    (contents, format!("Wydarzenie • {}", categories))
                 } else {
-                    "".to_string()
+                    ("".to_string(), "".to_string())
                 };
-                let event_category = "".to_string(); // Not used directly, content has it
 
                 // Substitution Details
                 let mut substitution_desc = String::new();
@@ -533,7 +547,7 @@ async fn fetch_attendances_data(client: LibrusClient, window_weak: slint::Weak<M
             
             // Resolve Subject & Topic & Classroom
             let mut subject_name = "-".to_string();
-            let mut topic = "".to_string(); // Not available in Attendance or Lesson?
+            let topic = "".to_string(); // Not available in Attendance or Lesson?
             // Wait, Lesson has Topic? No, Lesson has Subject, Teacher, Class.
             
             if let Some(l_id) = a.lesson.as_ref().and_then(|l| l.id) {
@@ -636,7 +650,6 @@ async fn fetch_attendances_data(client: LibrusClient, window_weak: slint::Weak<M
 }
 
 async fn fetch_messages_data(client: LibrusClient, window_weak: slint::Weak<MainWindow>) {
-    use librus_front::api::models::MessageType;
     
     println!("Fetching messages...");
     match client.fetch_messages().await {
@@ -679,6 +692,122 @@ async fn fetch_messages_data(client: LibrusClient, window_weak: slint::Weak<Main
         }
     }
 }
+async fn fetch_homework_data(client: LibrusClient, window_weak: slint::Weak<MainWindow>, state: AppState) {
+    // 1. Fetch Categories (if empty)
+    {
+        let mut cats = state.homework_categories.lock().await;
+        if cats.is_empty() {
+            if let Ok(new_cats) = client.fetch_homework_categories().await {
+                for c in new_cats {
+                    if let Some(id) = c.id {
+                        cats.insert(id, c);
+                    }
+                }
+            }
+        }
+    }
+    
+    // 2. Fetch Homework
+    // Calculate start of the school year (Sept 1st)
+    let today = chrono::Local::now().date_naive();
+    let current_year = today.year();
+    let start_year = if today.month() >= 9 {
+        current_year
+    } else {
+        current_year - 1
+    };
+    
+    let from = format!("{}-09-01", start_year);
+    let to = (today + chrono::Duration::days(30)).format("%Y-%m-%d").to_string();
+
+    // Use Synergia Scraping for Homework
+    match client.fetch_homework_via_synergia(Some(&from), Some(&to)).await {
+        Ok(homeworks) => {
+            println!("Fetched {} homework entries via Synergia scraping.", homeworks.len());
+            let subjects_map = state.subjects.lock().await;
+            // let cats_map = state.homework_categories.lock().await;
+            let teachers_map = state.teachers.lock().await;
+            
+            let mut ui_homeworks = Vec::new();
+            
+            for hw in homeworks {
+                 // For scraped data, we check transient fields first
+                 
+                 let subject_name: slint::SharedString = if let Some(name) = &hw.scraped_subject {
+                     name.clone().into()
+                 } else {
+                     let subj_id = hw.subject.as_ref().and_then(|s| s.id).unwrap_or(0);
+                     subjects_map.get(&subj_id).cloned().unwrap_or("?".into()).into()
+                 };
+
+                 let category: slint::SharedString = if let Some(cat) = &hw.scraped_category {
+                     cat.clone().into()
+                 } else {
+                     let cat_id = hw.category.as_ref().and_then(|c| c.id).unwrap_or(0);
+                     // cats_map is not locked here currently, assumed default or fixed
+                     if cat_id == -1 {
+                         "Zadanie domowe".into()
+                     } else {
+                         // cats_map.get(&cat_id)...
+                         "Zadanie domowe".into()
+                     }
+                 };
+                 
+                 let author: slint::SharedString = if let Some(teacher) = &hw.scraped_teacher {
+                     teacher.clone().into()
+                 } else {
+                     let author_id = hw.created_by.as_ref().and_then(|u| u.id).unwrap_or(0);
+                     teachers_map.get(&author_id).cloned().unwrap_or("?".into()).into()
+                 };
+                 
+                 let date = hw.date.clone().unwrap_or("-".into());
+                 
+                 ui_homeworks.push(UIHomework {
+                     id: hw.id.unwrap_or(0) as i32,
+                     subject: subject_name,
+                     content: hw.content.unwrap_or("".into()).into(),
+                     date: date.into(),
+                     category: category,
+                     author: author,
+                 });
+            }
+            
+            // Sort by date desc
+            ui_homeworks.sort_by(|a, b| b.date.cmp(&a.date));
+            
+            let _ = slint::invoke_from_event_loop(move || {
+                 let model = std::rc::Rc::new(slint::VecModel::from(ui_homeworks));
+                 if let Some(window) = window_weak.upgrade() {
+                     window.set_homework_list(model.into());
+                 }
+            });
+        }
+        Err(e) => {
+            eprintln!("Failed to fetch homework via Synergia: {:?}", e);
+            // Fallback to API if sync fails? 
+            // For now just error is enough debug info.
+        }
+    }
+}
+
+async fn refresh_all_data(client: LibrusClient, window_weak: slint::Weak<MainWindow>, state: AppState, week_start: String) {
+    // 1. Metadata (fast, sync-ish)
+    fetch_metadata(client.clone(), state.clone()).await;
+    
+    // 2. Data fetching (concurrent)
+    let t1 = fetch_dashboard_data(client.clone(), window_weak.clone());
+    let t2 = fetch_grades_data(client.clone(), window_weak.clone(), state.clone());
+    let t3 = fetch_timetable_data(client.clone(), window_weak.clone(), week_start, state.clone());
+    let t4 = fetch_announcements_data(client.clone(), window_weak.clone(), state.clone());
+    let t5 = fetch_attendances_data(client.clone(), window_weak.clone(), state.clone());
+    let t6 = fetch_messages_data(client.clone(), window_weak.clone());
+    let t7 = fetch_homework_data(client.clone(), window_weak.clone(), state.clone());
+    
+    // Wait for all
+    tokio::join!(t1, t2, t3, t4, t5, t6, t7);
+    
+    println!("Refresh complete.");
+}
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -709,14 +838,17 @@ async fn main() -> Result<()> {
         let app_state_clone_for_meta = app_state_lock.clone();
         drop(app_state_lock);
         
-        main_window.set_active_page(5);
+        main_window.set_active_page(1);
         
         let client_clone = client.clone();
         let window_weak = main_window.as_weak();
+        let week_start_clone = current_week_start.clone();
         tokio::spawn(async move {
-            fetch_metadata(client_clone.clone(), app_state_clone_for_meta.clone()).await;
-            fetch_dashboard_data(client_clone.clone(), window_weak.clone()).await;
-            fetch_attendances_data(client_clone, window_weak, app_state_clone_for_meta).await;
+            // fetch_metadata(client_clone.clone(), app_state_clone_for_meta.clone()).await;
+            // fetch_dashboard_data(client_clone.clone(), window_weak.clone()).await;
+            // fetch_attendances_data(client_clone, window_weak, app_state_clone_for_meta).await;
+            refresh_all_data(client_clone, window_weak, app_state_clone_for_meta, week_start_clone.lock().await.clone()).await;
+
         });
     }
 
@@ -1130,6 +1262,86 @@ async fn main() -> Result<()> {
                 println!("Synergia credentials saved and messages loaded!");
             }
         });
+    });
+
+    // Homework Callback
+    let main_window_weak = main_window.as_weak();
+    let app_state_clone = app_state.clone();
+    main_window.on_request_homework(move || {
+        let main_window_weak = main_window_weak.clone();
+        let app_state_clone = app_state_clone.clone();
+
+        tokio::spawn(async move {
+            let state = app_state_clone.lock().await;
+            if let Some(client) = &state.client {
+                let client_clone = client.clone();
+                let state_copy = state.clone();
+                drop(state);
+
+                fetch_homework_data(client_clone, main_window_weak.clone(), state_copy).await;
+
+                let _ = slint::invoke_from_event_loop(move || {
+                     if let Some(window) = main_window_weak.upgrade() {
+                         window.set_active_page(7);
+                     }
+                });
+            }
+        });
+    });
+
+
+
+    // Refresh Callback
+    let main_window_weak = main_window.as_weak();
+    let app_state_clone = app_state.clone();
+    let week_start_refresh = current_week_start.clone();
+    
+    main_window.on_request_refresh(move || {
+        let window = main_window_weak.clone();
+        let state_arc = app_state_clone.clone();
+        let week_arc = week_start_refresh.clone();
+        
+        tokio::spawn(async move {
+            let state = state_arc.lock().await;
+            if let Some(client) = &state.client {
+                let client_clone = client.clone();
+                let state_copy = state.clone();
+                drop(state);
+                
+                let date = week_arc.lock().await.clone();
+                println!("Manual refresh initiated...");
+                refresh_all_data(client_clone, window, state_copy, date).await;
+            }
+        });
+    });
+
+    // Auto-Refresh Loop (5 minutes)
+    let main_window_weak = main_window.as_weak();
+    let app_state_clone = app_state.clone();
+    let week_start_refresh = current_week_start.clone();
+
+    tokio::spawn(async move {
+        loop {
+            tokio::time::sleep(tokio::time::Duration::from_secs(300)).await; // 5 minutes
+            
+            let state = app_state_clone.lock().await;
+            if let Some(client) = &state.client {
+                let client_clone = client.clone();
+                let state_copy = state.clone();
+                drop(state);
+                
+                // Check if window is still alive
+                if main_window_weak.upgrade().is_none() {
+                    break;
+                }
+
+                let date = week_start_refresh.lock().await.clone();
+                println!("Auto-refresh initiated...");
+                refresh_all_data(client_clone, main_window_weak.clone(), state_copy, date).await;
+            } else {
+                 drop(state);
+            }
+        }
     });
 
     // Remove skip callback - no longer needed with inline form

@@ -250,15 +250,15 @@ impl LibrusClient {
             } else {
                 // Session expired, re-authenticate
                 let auth_state = self.get_auth_state().await;
-                let (new_sid, new_exp) = messages_auth::login_messages(&auth_state).await?;
-                self.set_messages_session(new_sid.clone(), new_exp).await;
+                let (new_sid, new_syn, new_exp) = messages_auth::login_messages(&auth_state).await?;
+                self.set_messages_session(new_sid.clone(), new_syn, new_exp).await;
                 new_sid
             }
         } else {
             // No session, authenticate
             let auth_state = self.get_auth_state().await;
-            let (new_sid, new_exp) = messages_auth::login_messages(&auth_state).await?;
-            self.set_messages_session(new_sid.clone(), new_exp).await;
+            let (new_sid, new_syn, new_exp) = messages_auth::login_messages(&auth_state).await?;
+            self.set_messages_session(new_sid.clone(), new_syn, new_exp).await;
             new_sid
         };
 

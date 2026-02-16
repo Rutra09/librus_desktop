@@ -1,0 +1,103 @@
+import { Theme } from "style.slint";
+import { VerticalBox, HorizontalBox, ScrollView } from "std-widgets.slint";
+
+export struct UIHomework {
+    id: int,
+    subject: string,
+    content: string,
+    date: string,
+    category: string,
+    author: string,
+}
+
+component HomeworkItem inherits Rectangle {
+    in property <UIHomework> homework;
+    
+    background: Theme.surface;
+    border-radius: Theme.radius;
+    border-width: 1px;
+    border-color: Theme.border;
+    
+    VerticalBox {
+        padding: 12px;
+        spacing: 8px;
+        
+        HorizontalBox {
+            spacing: 8px;
+            alignment: start;
+            
+            Text {
+                text: root.homework.subject;
+                font-weight: 700;
+                font-size: 14px;
+                color: Theme.foreground;
+            }
+            
+            Rectangle {
+                background: Theme.muted;
+                border-radius: 4px;
+                
+                HorizontalBox {
+                    padding-left: 6px;
+                    padding-right: 6px;
+                    padding-top: 2px;
+                    padding-bottom: 2px;
+                    
+                    Text {
+                        text: root.homework.category;
+                        font-size: 10px;
+                        color: Theme.muted-foreground;
+                    }
+                }
+            }
+            
+            Rectangle { horizontal-stretch: 1; }
+            
+            Text {
+                text: root.homework.date;
+                font-size: 12px;
+                color: Theme.muted-foreground;
+            }
+        }
+        
+        Text {
+            text: root.homework.content;
+            font-size: 13px;
+            color: Theme.foreground;
+            wrap: word-wrap;
+        }
+        
+        HorizontalBox {
+            alignment: end;
+            Text {
+                text: "Dodał(a): " + root.homework.author;
+                font-size: 11px;
+                color: Theme.muted-foreground;
+            }
+        }
+    }
+}
+
+export component HomeworkView inherits VerticalBox {
+    in property <[UIHomework]> homework-list;
+    callback back();
+    
+    spacing: Theme.gap;
+    padding: Theme.padding;
+    
+    Text {
+        text: "Zadania domowe";
+        font-size: 24px;
+        font-weight: 700;
+        color: Theme.foreground;
+    }
+    
+    ScrollView {
+        VerticalBox {
+            spacing: 8px;
+            for hw in root.homework-list : HomeworkItem {
+                homework: hw;
+            }
+        }
+    }
+}
