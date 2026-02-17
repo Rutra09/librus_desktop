@@ -274,20 +274,46 @@ impl LibrusClient {
         let response = client
             .post(&format!("{}/Inbox/action/GetList", super::constants::LIBRUS_MESSAGES_URL))
             .header("Content-Type", "application/xml")
-            .header("Cookie", session_id)  // session_id now contains full cookie string
+            .header("Cookie", session_id)  // session_id now ONLY contains DZIENNIKSID (sanitized)
             .body(xml_body)
             .send()
             .await?;
 
-        println!("[Messages Fetch] Response status: {}", response.status());
-        let text = response.text().await?;
-        println!("[Messages Fetch] Response body:\n{}", text);
+        // println!("[Messages Fetch] Response status: {}", response.status());
+        let mut text = response.text().await?;
+        // println!("[Messages Fetch] Response body:\n{}", text);
+
+        // Check for eAccessDeny or invalid session
+        if text.contains("eAccessDeny") || text.contains("Brak dostępu") {
+             println!("[Messages Fetch] eAccessDeny detected. Refreshing session...");
+             // Refresh session
+             let new_session_id = self.force_refresh_messages_session().await?;
+             
+             // Retry request
+              let client = reqwest::Client::builder()
+                .user_agent(super::constants::SYNERGIA_USER_AGENT)
+                .cookie_store(true)
+                .build()?;
+
+            let response = client
+                .post(&format!("{}/Inbox/action/GetList", super::constants::LIBRUS_MESSAGES_URL))
+                .header("Content-Type", "application/xml")
+                .header("Cookie", new_session_id) 
+                .body(xml_body)
+                .send()
+                .await?;
+            
+             // println!("[Messages Fetch] Retry response status: {}", response.status());
+             text = response.text().await?;
+        }
+        
+        // println!("[Messages Fetch] Final Response body:\n{}", text);
 
         // Parse XML response
         let mut messages = Vec::new();
         
         if let Ok(doc) = roxmltree::Document::parse(&text) {
-            println!("[Messages Fetch] Successfully parsed XML");
+            // println!("[Messages Fetch] Successfully parsed XML");
             for node in doc.descendants() {
                 if node.tag_name().name() == "item" || node.tag_name().name() == "ArrayItem" {
                     let id = node.descendants()

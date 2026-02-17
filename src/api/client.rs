@@ -363,6 +363,25 @@ impl LibrusClient {
 
     }
 
+    /// Force refresh the messages session.
+    pub async fn force_refresh_messages_session(&self) -> Result<String> {
+        let mut auth = self.auth.lock().await;
+        // Invalidate current session
+        auth.messages_session_id = None;
+        auth.messages_session_expiry = None;
+        
+        // println!("[Client] Forcing refresh of Synergia session...");
+        match super::messages_auth::login_messages(&auth).await {
+            Ok((msg_cookie, syn_cookie, expiry)) => {
+                auth.messages_session_id = Some(msg_cookie.clone());
+                auth.synergia_cookie = Some(syn_cookie);
+                auth.messages_session_expiry = Some(expiry);
+                Ok(msg_cookie)
+            }
+            Err(e) => Err(e),
+        }
+    }
+
     /// Helper to get or refresh Synergia session cookie
     async fn get_synergia_session(&self) -> Result<String> {
         let mut auth = self.auth.lock().await;
@@ -381,7 +400,7 @@ impl LibrusClient {
         }
         
         // Login again
-        println!("[Client] Refreshing Synergia session...");
+        // println!("[Client] Refreshing Synergia session...");
         match super::messages_auth::login_messages(&auth).await {
             Ok((msg_cookie, syn_cookie, expiry)) => {
                 auth.messages_session_id = Some(msg_cookie);
