@@ -363,16 +363,72 @@ impl LibrusClient {
 
     }
 
+    /// Attempt to login to messages, refreshing tokens if needed.
+    pub async fn login_messages_with_retry(&self) -> Result<(String, String, i64)> {
+        let mut auth = self.auth.lock().await.clone();
+        
+        // Helper to update the locked state
+        let update_auth = |new_auth: AuthState| async {
+            let mut lock = self.auth.lock().await;
+            *lock = new_auth;
+        };
+
+        // Try 1: Just login
+        match super::messages_auth::login_messages(&auth).await {
+            Ok(res) => return Ok(res),
+            Err(e) => {
+                let err_str = e.to_string();
+                if !err_str.contains("AutoLoginToken not found") && !err_str.contains("TokenIsExpired") {
+                    return Err(e);
+                }
+                println!("[Client] Messages login failed ({}). Attempting refresh...", err_str);
+            }
+        }
+
+        // Try 2: Refresh Synergia token
+        match auth::refresh_synergia_token(&auth).await {
+            Ok(new_auth) => {
+                auth = new_auth.clone();
+                update_auth(new_auth).await;
+            }
+            Err(e) => {
+                println!("[Client] Synergia refresh failed: {}. Attempting full login...", e);
+                // Try 3: Full login with saved credentials
+                let email = auth.portal_email.clone();
+                let password = auth.portal_password.clone();
+                
+                if email.is_empty() || password.is_empty() {
+                    bail!("Cannot re-login: no saved credentials");
+                }
+
+                let new_auth = auth::login_portal(&email, &password).await?;
+                // Preserve Synergia credentials if any
+                let mut final_auth = new_auth;
+                final_auth.synergia_username = auth.synergia_username.clone();
+                final_auth.synergia_password = auth.synergia_password.clone();
+                
+                auth = final_auth.clone();
+                update_auth(final_auth).await;
+            }
+        }
+
+        // Final retry
+        super::messages_auth::login_messages(&auth).await
+    }
+
     /// Force refresh the messages session.
     pub async fn force_refresh_messages_session(&self) -> Result<String> {
-        let mut auth = self.auth.lock().await;
-        // Invalidate current session
-        auth.messages_session_id = None;
-        auth.messages_session_expiry = None;
+        // Invalidate current session first
+        {
+            let mut auth = self.auth.lock().await;
+            auth.messages_session_id = None;
+            auth.messages_session_expiry = None;
+        }
         
         // println!("[Client] Forcing refresh of Synergia session...");
-        match super::messages_auth::login_messages(&auth).await {
+        match self.login_messages_with_retry().await {
             Ok((msg_cookie, syn_cookie, expiry)) => {
+                let mut auth = self.auth.lock().await;
                 auth.messages_session_id = Some(msg_cookie.clone());
                 auth.synergia_cookie = Some(syn_cookie);
                 auth.messages_session_expiry = Some(expiry);
@@ -384,35 +440,33 @@ impl LibrusClient {
 
     /// Helper to get or refresh Synergia session cookie
     async fn get_synergia_session(&self) -> Result<String> {
-        let mut auth = self.auth.lock().await;
-        
-        // Check if we have a valid session
-        let is_valid = if let Some(expiry) = auth.messages_session_expiry {
-             chrono::Utc::now().timestamp() < expiry
-        } else {
-            false
-        };
+        // Check validity first (scoped lock)
+        {
+            let auth = self.auth.lock().await;
+            let is_valid = if let Some(expiry) = auth.messages_session_expiry {
+                 chrono::Utc::now().timestamp() < expiry
+            } else {
+                false
+            };
 
-        if is_valid {
-             if let Some(cookie) = &auth.synergia_cookie {
-                 return Ok(cookie.clone());
-             }
+            if is_valid {
+                 if let Some(cookie) = &auth.synergia_cookie {
+                     return Ok(cookie.clone());
+                 }
+            }
         }
         
         // Login again
         // println!("[Client] Refreshing Synergia session...");
-        match super::messages_auth::login_messages(&auth).await {
+        match self.login_messages_with_retry().await {
             Ok((msg_cookie, syn_cookie, expiry)) => {
+                let mut auth = self.auth.lock().await;
                 auth.messages_session_id = Some(msg_cookie);
                 auth.synergia_cookie = Some(syn_cookie.clone());
                 auth.messages_session_expiry = Some(expiry);
                 Ok(syn_cookie)
             }
-            Err(e) => {
-                 // Try refreshing portal token and retrying?
-                 // For now just error
-                 Err(e)
-            }
+            Err(e) => Err(e),
         }
     }
 }

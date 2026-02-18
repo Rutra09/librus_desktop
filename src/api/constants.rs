@@ -11,7 +11,7 @@ pub const LIBRUS_API_TOKEN_JST_URL: &str = "https://api.librus.pl/OAuth/TokenJST
 pub const LIBRUS_API_AUTHORIZATION: &str = "Basic Mjg6ODRmZGQzYTg3YjAzZDNlYTZmZmU3NzdiNThiMzMyYjE=";
 
 /// User-Agent string mimicking the Librus mobile app
-pub const LIBRUS_USER_AGENT: &str = "Dalvik/2.1.0 Android LibrusMobileApp";
+pub const LIBRUS_USER_AGENT: &str = "Dalvik/2.1.0 AndroidLibrusMobileApp";
 
 /// Portal OAuth2 URLs (for future email-based login)
 pub const LIBRUS_PORTAL_URL: &str = "https://portal.librus.pl/api";

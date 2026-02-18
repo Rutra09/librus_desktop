@@ -13,7 +13,7 @@ pub async fn login_messages(auth: &super::auth::AuthState) -> Result<(String, St
     
     // Step 1: Get AutoLoginToken from API
     let client = Client::builder()
-        .user_agent(SYNERGIA_USER_AGENT)
+        .user_agent(LIBRUS_USER_AGENT)
         .build()
         .context("Failed to create HTTP client")?;
     
@@ -36,18 +36,11 @@ pub async fn login_messages(auth: &super::auth::AuthState) -> Result<(String, St
     // Step 2: Use token to establish Synergia session and get cookies
     let jar = std::sync::Arc::new(reqwest::cookie::Jar::default());
     let client_with_cookies = Client::builder()
-        .user_agent(SYNERGIA_USER_AGENT)
+        .user_agent(LIBRUS_USER_AGENT)
         .cookie_provider(std::sync::Arc::clone(&jar))
         .redirect(reqwest::redirect::Policy::none()) // Manual redirect handling
         .build()
         .context("Failed to create HTTP client with cookies")?;
-    
-    // Step 2a: First, use token to establish Synergia session
-    // We need to follow redirects manually until we hit "AutoLogon" or a final page
-    let initial_url = format!(
-        "https://synergia.librus.pl/loguj/token/{}/przenies",
-        auto_login_token
-    );
     
     // Step 2a: Establish Synergia session
     // We need to follow redirects manually until we hit a final page (likely uczen/index)
