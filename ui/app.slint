@@ -88,12 +88,6 @@ export component MainWindow inherits Window {
             lucky-number: lucky-number;
             navigate(p) => {
                 active-page = p;
-                if (p == 2) { request-timetable(); }
-                if (p == 3) { request-grades(); }
-                if (p == 4) { request-announcements(); }
-                if (p == 5) { request-attendances(); }
-                if (p == 6) { request-messages(); }
-                if (p == 7) { request-homework(); }
             }
             logout => { request-logout(); }
             refresh => { request-refresh(); }
@@ -103,7 +97,8 @@ export component MainWindow inherits Window {
             background: Theme.background;
             clip: true;
 
-            if active-page == 0 : LoginView {
+            LoginView {
+                visible: active-page == 0;
                 error-message: login-error;
                 is-loading: is-logging-in;
                 login(email, password) => {
@@ -111,15 +106,15 @@ export component MainWindow inherits Window {
                 }
             }
 
-            if active-page == 1 : DashboardView {
-                // Dashboard no longer needs navigation callbacks as Sidebar handles them
-                // But we still pass user-name etc if dashboard displays them
+            DashboardView {
+                visible: active-page == 1;
                 user-name: user-name;
                 lucky-number: lucky-number;
                 lucky-number-day: lucky-number-day;
             }
 
-            if active-page == 2 : TimetableView {
+            TimetableView {
+                visible: active-page == 2;
                 grid-rows: timetable-grid-rows;
                 day-headers: timetable-day-headers;
                 week-range: timetable-week-range;
@@ -128,26 +123,30 @@ export component MainWindow inherits Window {
                 next-week => { request-next-week(); }
             }
             
-            if active-page == 3 : GradesView {
+            GradesView {
+                visible: active-page == 3;
                 subjects: grades-list;
-                back => { active-page = 1; } // Optional now
+                back => { active-page = 1; }
                 add-simulated-grade(idx, val, weight) => { 
                     root.add-simulated-grade(idx, val, weight); 
                 }
             }
             
-            if active-page == 4 : AnnouncementsView {
+            AnnouncementsView {
+                visible: active-page == 4;
                 notices: announcements-list;
-                back => { active-page = 1; } // Optional now
+                back => { active-page = 1; }
             }
             
-            if active-page == 5 : AttendanceView {
+            AttendanceView {
+                visible: active-page == 5;
                 attendances: attendances_list;
                 frequency-str: attendance-frequency;
                 stats: attendance_stats;
             }
             
-            if active-page == 6 : MessagesView {
+            MessagesView {
+                visible: active-page == 6;
                 messages: messages-list;
                 needs-credentials: !has-synergia-credentials;
                 selected-message-body: selected-message-body;
@@ -164,7 +163,8 @@ export component MainWindow inherits Window {
                 back => { active-page = 1; }
             }
             
-            if active-page == 7 : HomeworkView {
+            HomeworkView {
+                visible: active-page == 7;
                 homework-list: homework-list;
                 back => { active-page = 1; }
             }

@@ -1097,60 +1097,15 @@ async fn main() -> Result<()> {
     });
 
     // Timetable Callbacks
-    let main_window_weak = main_window.as_weak();
-    let app_state_clone = app_state.clone();
-    let week_start_mutex = current_week_start.clone();
 
-    main_window.on_request_timetable(move || {
-        let main_window_weak = main_window_weak.clone();
-        let app_state_clone = app_state_clone.clone();
-        let week_start_mutex = week_start_mutex.clone();
 
-        tokio::spawn(async move {
-            let state = app_state_clone.lock().await;
-            if let Some(client) = &state.client {
-                let client_clone = client.clone();
-                let state_copy = state.clone();
-                drop(state); 
 
-                let d = week_start_mutex.lock().await.clone();
-                fetch_timetable_data(client_clone.clone(), main_window_weak.clone(), d.clone(), state_copy).await;
-                prefetch_adjacent_weeks(client_clone, &d);
-
-                // Navigate
-                let _ = slint::invoke_from_event_loop(move || {
-                     if let Some(window) = main_window_weak.upgrade() {
-                         window.set_active_page(2);
-                     }
-                });
-            }
-        });
-    });
+    // removed on_request_timetable
 
     // Grades Callbacks
     let main_window_weak = main_window.as_weak();
     let app_state_clone = app_state.clone();
-    main_window.on_request_grades(move || {
-        let main_window_weak = main_window_weak.clone();
-        let app_state_clone = app_state_clone.clone();
-
-        tokio::spawn(async move {
-            let state = app_state_clone.lock().await;
-            if let Some(client) = &state.client {
-                let client_clone = client.clone();
-                let state_copy = state.clone();
-                drop(state);
-
-                fetch_grades_data(client_clone, main_window_weak.clone(), state_copy).await;
-
-                let _ = slint::invoke_from_event_loop(move || {
-                     if let Some(window) = main_window_weak.upgrade() {
-                         window.set_active_page(3);
-                     }
-                });
-            }
-        });
-    });
+    // removed on_request_grades
 
     // Simulated Grade Callback
     let main_window_weak = main_window.as_weak();
@@ -1218,30 +1173,8 @@ async fn main() -> Result<()> {
 
 // ... main ...
 
-    // Announcements Callbacks
-    let main_window_weak = main_window.as_weak();
-    let app_state_clone = app_state.clone();
-    main_window.on_request_announcements(move || {
-        let main_window_weak = main_window_weak.clone();
-        let app_state_clone = app_state_clone.clone();
 
-        tokio::spawn(async move {
-            let state = app_state_clone.lock().await;
-            if let Some(client) = &state.client {
-                let client_clone = client.clone();
-                let state_copy = state.clone();
-                drop(state);
-
-                fetch_announcements_data(client_clone, main_window_weak.clone(), state_copy).await;
-
-                let _ = slint::invoke_from_event_loop(move || {
-                     if let Some(window) = main_window_weak.upgrade() {
-                         window.set_active_page(4);
-                     }
-                });
-            }
-        });
-    });
+    // removed on_request_announcements
 
     let main_window_weak = main_window.as_weak();
     let app_state_clone = app_state.clone();
@@ -1303,54 +1236,11 @@ async fn main() -> Result<()> {
         });
     });
 
-    // Attendance Callbacks
-    let main_window_weak = main_window.as_weak();
-    let app_state_clone = app_state.clone();
-    main_window.on_request_attendances(move || {
-        let main_window_weak = main_window_weak.clone();
-        let app_state_clone = app_state_clone.clone();
 
-        tokio::spawn(async move {
-            let state = app_state_clone.lock().await;
-            if let Some(client) = &state.client {
-                let client_clone = client.clone();
-                let state_copy = state.clone();
-                drop(state);
+    // removed on_request_attendances
 
-                fetch_attendances_data(client_clone, main_window_weak.clone(), state_copy).await;
 
-                let _ = slint::invoke_from_event_loop(move || {
-                     if let Some(window) = main_window_weak.upgrade() {
-                         window.set_active_page(5);
-                     }
-                });
-            }
-        });
-    });
-
-    // Messages Callbacks
-    let main_window_weak = main_window.as_weak();
-    let app_state_clone = app_state.clone();
-    main_window.on_request_messages(move || {
-        let main_window_weak = main_window_weak.clone();
-        let app_state_clone = app_state_clone.clone();
-
-        tokio::spawn(async move {
-            let state = app_state_clone.lock().await;
-            if let Some(client) = &state.client {
-                let client_clone = client.clone();
-                drop(state);
-
-                fetch_messages_data(client_clone, main_window_weak.clone()).await;
-
-                let _ = slint::invoke_from_event_loop(move || {
-                     if let Some(window) = main_window_weak.upgrade() {
-                         window.set_active_page(6);
-                     }
-                });
-            }
-        });
-    });
+    // removed on_request_messages
 
     // Message Details Callback
     let main_window_weak = main_window.as_weak();
@@ -1428,30 +1318,8 @@ async fn main() -> Result<()> {
         });
     });
 
-    // Homework Callback
-    let main_window_weak = main_window.as_weak();
-    let app_state_clone = app_state.clone();
-    main_window.on_request_homework(move || {
-        let main_window_weak = main_window_weak.clone();
-        let app_state_clone = app_state_clone.clone();
 
-        tokio::spawn(async move {
-            let state = app_state_clone.lock().await;
-            if let Some(client) = &state.client {
-                let client_clone = client.clone();
-                let state_copy = state.clone();
-                drop(state);
-
-                fetch_homework_data(client_clone, main_window_weak.clone(), state_copy).await;
-
-                let _ = slint::invoke_from_event_loop(move || {
-                     if let Some(window) = main_window_weak.upgrade() {
-                         window.set_active_page(7);
-                     }
-                });
-            }
-        });
-    });
+    // removed on_request_homework
 
 
 
