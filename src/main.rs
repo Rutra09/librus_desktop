@@ -13,6 +13,7 @@ use librus_front::api::client::LibrusClient;
 use librus_front::api::auth::AuthState;
 use librus_front::api::models::Lesson; // Import Lesson
 use librus_front::session;
+use librus_front::updater;
 
 slint::include_modules!();
 
@@ -984,6 +985,19 @@ async fn main() -> Result<()> {
     // State for timetable
     let current_week_start: Arc<Mutex<String>> = Arc::new(Mutex::new(get_current_monday().format("%Y-%m-%d").to_string()));
 
+    // Check for updates
+    let mw_weak = main_window.as_weak();
+    tokio::spawn(async move {
+        if let Ok(Some(version)) = updater::check_for_updates().await {
+            let _ = slint::invoke_from_event_loop(move || {
+                if let Some(window) = mw_weak.upgrade() {
+                    window.set_update_version(version.into());
+                    window.set_show_update_dialog(true);
+                }
+            });
+        }
+    });
+
     // Try to load session
     if let Ok(Some(session)) = session::load_session() {
         let auth = session_to_auth(session);
@@ -1377,6 +1391,49 @@ async fn main() -> Result<()> {
     });
 
     // Remove skip callback - no longer needed with inline form
+
+
+    // Updater callbacks
+    let mw_weak_updater = main_window.as_weak();
+    main_window.on_close_update_dialog(move || {
+        if let Some(window) = mw_weak_updater.upgrade() {
+            window.set_show_update_dialog(false);
+        }
+    });
+
+    let mw_weak_installer = main_window.as_weak();
+    main_window.on_request_install_update(move || {
+        let mw_weak_1 = mw_weak_installer.clone();
+        let mw_weak_2 = mw_weak_installer.clone();
+        tokio::spawn(async move {
+            let _ = slint::invoke_from_event_loop(move || {
+                if let Some(window) = mw_weak_1.upgrade() {
+                    window.set_is_updating(true);
+                }
+            });
+            match updater::install_update().await {
+                Ok(_) => {
+                    let mw_weak_ok = mw_weak_2.clone();
+                    let _ = slint::invoke_from_event_loop(move || {
+                        if let Some(window) = mw_weak_ok.upgrade() {
+                            window.set_update_status("Zaktualizowano pomyślnie. Zrestartuj aplikację.".into());
+                            window.set_is_updating(false); // Done visually
+                        }
+                    });
+                }
+                Err(e) => {
+                    let err_msg = format!("Błąd pobierania: {}", e);
+                    let mw_weak_err = mw_weak_2.clone();
+                    let _ = slint::invoke_from_event_loop(move || {
+                        if let Some(window) = mw_weak_err.upgrade() {
+                            window.set_update_status(err_msg.into());
+                            window.set_is_updating(false);
+                        }
+                    });
+                }
+            }
+        });
+    });
 
     main_window.run()?;
     Ok(())

@@ -73,6 +73,14 @@ export component MainWindow inherits Window {
     callback submit-synergia-credentials(string, string);
     callback skip-synergia-credentials();
     
+    // Auto-Updater properties
+    in-out property <bool> show-update-dialog: false;
+    in-out property <string> update-version: "";
+    in-out property <bool> is-updating: false;
+    in-out property <string> update-status: "Nowa wersja jest gotowa do pobrania i instalacji.";
+    callback request-install-update();
+    callback close-update-dialog();
+    
     preferred-width: 1600px;
     preferred-height: 1000px;
 
@@ -169,7 +177,43 @@ export component MainWindow inherits Window {
                 back => { active-page = 1; }
             }
             
+            // Update Dialog Overlay
+            if root.show-update-dialog : Rectangle {
+                width: 100%; height: 100%;
+                TouchArea {} // Block clicks to background
+                Rectangle {
+                    background: #00000080;
+                }
+                Rectangle {
+                    width: 380px; height: 180px;
+                    background: Theme.card;
+                    border-radius: Theme.radius;
+                    border-width: 1px;
+                    border-color: Theme.border;
 
+                    VerticalBox {
+                        padding: 24px;
+                        spacing: 16px;
+                        alignment: center;
+                        Text { text: "Dostępna Aktualizacja"; font-size: 20px; font-weight: 700; color: Theme.foreground; }
+                        Text { text: root.update-status + " (" + root.update-version + ")"; font-size: 14px; color: Theme.muted-foreground; wrap: word-wrap; }
+                        
+                        Rectangle { vertical-stretch: 1; }
+                        HorizontalBox {
+                            alignment: end;
+                            spacing: 12px;
+                            vertical-stretch: 0;
+                            if !root.is-updating : Button { text: "Później"; clicked => { root.close-update-dialog(); } }
+                            Button {
+                                text: root.is-updating ? "Pobieranie..." : "Aktualizuj";
+                                primary: true;
+                                enabled: !root.is-updating;
+                                clicked => { root.request-install-update(); }
+                            }
+                        }
+                    }
+                }
+            }
         }
     }
 }
