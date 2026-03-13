@@ -3,7 +3,7 @@ import { Theme } from "style.slint";
 import { Sidebar } from "sidebar.slint";
 import { LoginView } from "login.slint";
 import { DashboardView } from "dashboard.slint";
-import { TimetableView, UIDay, UILesson } from "timetable.slint";
+import { TimetableView, UIGridRow, UIGridCell } from "timetable.slint";
 import { GradesView, UISubjectGrades, UIGrade } from "grades.slint";
 import { AnnouncementsView, UIAnnouncement } from "announcements.slint";
 import { AttendanceView, UIAttendance, UIAttendanceSubject } from "attendance.slint";
@@ -19,7 +19,7 @@ export component MainWindow inherits Window {
     
     background: Theme.background;
 
-    in-out property <int> active-page: 0; // 0: Login, 1: Dashboard, 2: Timetable, 3: Grades, 4: Announcements
+    in-out property <int> active-page: 0; // 0: Login, 1: Dashboard, 2: Timetable, 3: Grades, 4: Announcements, 5: Attendance, 6: Messages, 7: Homework
     in-out property <string> login-error;
     in-out property <bool> is-logging-in: false;
     in-out property <bool> has-synergia-credentials: false;
@@ -31,8 +31,10 @@ export component MainWindow inherits Window {
     in-out property <string> lucky-number-day: "";
 
     // Timetable properties
-    in-out property <[UIDay]> timetable-schedule;
+    in-out property <[UIGridRow]> timetable-grid-rows;
+    in-out property <[string]> timetable-day-headers;
     in-out property <string> timetable-week-range: "Loading...";
+    in-out property <int> timetable-today-col: -1;
 
     // Grades properties
     in-out property <[UISubjectGrades]> grades-list;
@@ -71,8 +73,8 @@ export component MainWindow inherits Window {
     callback submit-synergia-credentials(string, string);
     callback skip-synergia-credentials();
     
-    preferred-width: 1200px;
-    preferred-height: 800px;
+    preferred-width: 1600px;
+    preferred-height: 1000px;
 
     callback add-simulated-grade(int, string, float);
 
@@ -118,8 +120,10 @@ export component MainWindow inherits Window {
             }
 
             if active-page == 2 : TimetableView {
-                days: timetable-schedule;
+                grid-rows: timetable-grid-rows;
+                day-headers: timetable-day-headers;
                 week-range: timetable-week-range;
+                today-col-index: timetable-today-col;
                 prev-week => { request-prev-week(); }
                 next-week => { request-next-week(); }
             }

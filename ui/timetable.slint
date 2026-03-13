@@ -1,5 +1,28 @@
 import { VerticalBox, HorizontalBox, Button, ScrollView } from "std-widgets.slint";
 import { Theme } from "style.slint";
+import { IconDisplay, IconSet } from "@lucide";
+
+// ── Data model ──────────────────────────────────────────────────────────
+
+export struct UIGridCell {
+    has-lesson: bool,
+    subject: string,
+    teacher: string,
+    room: string,
+    hour-from: string,
+    hour-to: string,
+    lesson-type: int,       // 0=normal, 1=cancelled, 2=change, 3=shifted_source, 4=shifted_target
+    event-content: string,
+    event-category: string,
+    change-info: string,
+}
+
+export struct UIGridRow {
+    no: int,
+    hour-from: string,
+    hour-to: string,
+    cells: [UIGridCell],
+}
 
 export struct UILesson {
     id: int,
@@ -8,13 +31,13 @@ export struct UILesson {
     teacher: string,
     room: string,
     color: brush,
-    is_substitution: bool,
-    is_canceled: bool,
-    hour_from: string,
-    hour_to: string,
-    event_content: string,
-    event_category: string,
-    substitution_desc: string,
+    is-substitution: bool,
+    is-canceled: bool,
+    hour-from: string,
+    hour-to: string,
+    event-content: string,
+    event-category: string,
+    substitution-desc: string,
 }
 
 export struct UIDay {
@@ -23,283 +46,378 @@ export struct UIDay {
     lessons: [UILesson],
 }
 
+// ── Popover ─────────────────────────────────────────────────────────────
+
 component LessonPopover inherits Rectangle {
     in property <bool> open;
-    in property <UILesson> lesson;
+    in property <UIGridCell> cell;
     callback close;
-
     visible: open;
-    
-    // Backdrop with fade
-    TouchArea {
-        width: 100%;
-        height: 100%;
-        clicked => { root.close(); }
-    }
-    Rectangle {
-        background: #00000080;
-        width: 100%;
-        height: 100%;
-        opacity: open ? 1.0 : 0.0;
-        animate opacity { duration: 200ms; }
-    }
 
-    // Popover Content
+    TouchArea { width: 100%; height: 100%; clicked => { root.close(); } }
+    Rectangle { background: #00000080; width: 100%; height: 100%; }
+
     Rectangle {
-        width: 320px;
-        height: 400px; 
+        width: 380px;
+        height: 420px;
         background: Theme.popover;
-        border-radius: Theme.radius;
+        border-radius: 12px;
         border-width: 1px;
         border-color: Theme.border;
-        
-        // Centering
         x: (parent.width - self.width) / 2;
         y: (parent.height - self.height) / 2;
-
-        // Animate
         opacity: open ? 1.0 : 0.0;
         animate opacity { duration: 200ms; easing: ease-out; }
-        
+
         TouchArea {}
 
         VerticalBox {
-            padding: Theme.padding;
-            spacing: Theme.gap;
+            padding: 20px;
+            spacing: 12px;
             alignment: start;
 
-            // Header
+            Text { text: "Szczegóły lekcji"; font-size: 12px; color: Theme.muted-foreground; }
+
             Text {
-                text: "Szczegóły lekcji";
-                font-size: 13px;
-                color: Theme.muted-foreground;
-            }
-            
-            Text {
-                text: root.lesson.subject;
-                font-size: 20px;
+                text: root.cell.subject;
+                font-size: 22px;
                 font-weight: 700;
                 color: Theme.foreground;
                 wrap: word-wrap;
             }
 
-            if root.lesson.is_substitution : Rectangle {
-                background: #854d0e; 
-                border-radius: Theme.radius;
-                height: sub-layout.preferred-height + 16px;
-                vertical-stretch: 0;
-                
-                sub-layout := VerticalBox {
-                    padding: 8px;
-                    spacing: 2px;
-                    Text { text: "Zastępstwo"; font-size: 11px; color: #fcd34d; font-weight: 700; } // amber-300
-                    if root.lesson.substitution_desc != "" : Text { 
-                        text: root.lesson.substitution_desc; 
-                        font-size: 12px; 
-                        color: Theme.foreground; 
-                        wrap: word-wrap;
+            if root.cell.lesson-type == 1 || root.cell.lesson-type == 3 : Rectangle {
+                background: #991b1b; border-radius: 6px; height: 26px; vertical-stretch: 0;
+                HorizontalLayout {
+                    spacing: 4px; alignment: center; padding-left: 8px; padding-right: 8px;
+                    Rectangle { 
+                        width: 14px; 
+                        IconDisplay { icon: root.cell.lesson-type == 1 ? IconSet.Ban : IconSet.ArrowRightLeft; size: 14px; stroke-width: 2.3; stroke: #fca5a5; y: (parent.height - self.height) / 2; }
                     }
-                }
-            }
-
-            if root.lesson.event_content != "" : Rectangle {
-                background: Theme.accent;
-                border-radius: Theme.radius;
-                height: evt-layout.preferred-height + 16px;
-                vertical-stretch: 0;
-                
-                evt-layout := VerticalBox {
-                    padding: 8px;
-                    spacing: 4px;
                     Text {
-                        text: root.lesson.event_category != "" ? root.lesson.event_category : "Wydarzenie";
-                        font-weight: 600;
-                        font-size: 12px;
-                        color: Theme.foreground;
+                        text: root.cell.lesson-type == 1 ? "Odwołane" : "Przeniesione (źródło)";
+                        font-size: 11px; font-weight: 600; color: #fca5a5;
+                        vertical-alignment: center;
                     }
-                TextInput {
-                    text: root.lesson.event_content;
-                    color: Theme.foreground;
-                    font-size: 13px;
-                    read-only: true;
-                    single-line: false;
-                    wrap: word-wrap;
-                    vertical-alignment: top;
                 }
             }
-        }
 
-            // Details
+            if root.cell.lesson-type == 2 || root.cell.lesson-type == 4 : Rectangle {
+                background: #92400e; border-radius: 6px; height: 26px; vertical-stretch: 0;
+                HorizontalLayout {
+                    spacing: 4px; alignment: center; padding-left: 8px; padding-right: 8px;
+                    Rectangle { 
+                        width: 14px;
+                        IconDisplay { icon: root.cell.lesson-type == 2 ? IconSet.UserRoundPen : IconSet.ArrowRightLeft; size: 14px; stroke-width: 2.3; stroke: #fcd34d; y: (parent.height - self.height) / 2;}
+                    }
+                    Text {
+                        text: root.cell.lesson-type == 2 ? "Zastępstwo" : "Przeniesione (cel)";
+                        font-size: 11px; font-weight: 600; color: #fcd34d;
+                        vertical-alignment: center;
+                    }
+                }
+            }
+
+            if root.cell.change-info != "" : Text {
+                text: root.cell.change-info;
+                font-size: 12px; color: Theme.muted-foreground; wrap: word-wrap;
+            }
+
+            if root.cell.event-content != "" : Rectangle {
+                background: #1e3a5f; border-radius: 8px;
+                height: evt-lay.preferred-height + 16px; vertical-stretch: 0;
+                evt-lay := VerticalBox {
+                    padding: 10px; spacing: 4px;
+                    Text { text: root.cell.event-category != "" ? root.cell.event-category : "Wydarzenie"; font-weight: 600; font-size: 11px; color: #93c5fd; }
+                    Text { text: root.cell.event-content; color: Theme.foreground; font-size: 13px; wrap: word-wrap; }
+                }
+            }
+
+            Rectangle { height: 1px; background: Theme.border; vertical-stretch: 0; }
+
             VerticalBox {
-                spacing: 4px;
-                Text {
-                    text: root.lesson.hour_from + " - " + root.lesson.hour_to;
-                    color: Theme.muted-foreground;
-                    font-size: 14px;
-                }
-                Text {
-                     text: "Nauczyciel: " + root.lesson.teacher;
-                     color: Theme.muted-foreground;
-                     font-size: 13px;
-                     wrap: word-wrap;
-                }
-                Text {
-                     text: "Sala: " + root.lesson.room;
-                     color: Theme.muted-foreground;
-                     font-size: 13px;
-                }
+                spacing: 6px; padding: 0px;
+                Text { text: root.cell.hour-from + " – " + root.cell.hour-to; color: Theme.muted-foreground; font-size: 13px; }
+                Text { text: "Nauczyciel: " + root.cell.teacher; color: Theme.muted-foreground; font-size: 13px; wrap: word-wrap; }
+                Text { text: "Sala: " + root.cell.room; color: Theme.muted-foreground; font-size: 13px; }
             }
-            
-            Rectangle { vertical-stretch: 1; } // Spacer
-            
-            Button {
-                text: "Zamknij";
-                clicked => { root.close(); }
-            }
+
+            Rectangle { vertical-stretch: 1; }
+            Button { text: "Zamknij"; clicked => { root.close(); } }
         }
     }
 }
 
-component LessonItem inherits Rectangle {
-    in property <UILesson> lesson;
-    callback clicked;
-    
-    background: lesson.is_canceled ? #7f1d1d : (lesson.is_substitution ? #854d0e : Theme.card); 
-    border-radius: Theme.radius;
-    border-width: 1px;
-    border-color: Theme.border;
+// ── Grid Cell ───────────────────────────────────────────────────────────
 
-    TouchArea {
+component GridCell inherits Rectangle {
+    in property <UIGridCell> cell;
+    in property <bool> is-today: false;
+    callback clicked;
+
+    // Height naturally flows from parent's HorizontalBox stretch 
+    border-width: 0px;
+
+    background: !cell.has-lesson
+        ? (is-today ? #ffffff08 : Theme.background)
+        : cell.lesson-type == 1 ? #7f1d1d28
+        : cell.lesson-type == 3 ? #7f1d1d28
+        : cell.lesson-type == 2 ? #854d0e28
+        : cell.lesson-type == 4 ? #854d0e28
+        : (is-today ? #ffffff0c : Theme.card);
+
+    ta := TouchArea {
+        enabled: cell.has-lesson;
         clicked => { root.clicked(); }
-        width: 100%;
-        height: 100%;
+        mouse-cursor: cell.has-lesson ? pointer : default;
     }
-    
+
+    Rectangle {
+        visible: ta.has-hover && cell.has-lesson;
+        background: #ffffff0a;
+    }
+
+    // Unconditional block ensures background stretches properly 
     VerticalBox {
-        padding: 8px;
-        spacing: 4px;
-        
+        visible: cell.has-lesson;
+        padding-left: 10px;
+        padding-right: 10px;
+        padding-top: 6px;
+        padding-bottom: 6px;
+        spacing: 2px;
+        alignment: start;
+
+        // Status badge
+        if cell.lesson-type == 1 || cell.lesson-type == 3 : HorizontalBox {
+            spacing: 0px; vertical-stretch: 0; alignment: start;
+            Rectangle {
+                background: #991b1b;
+                border-radius: 3px;
+                height: 16px;
+                width: badge-txt.preferred-width + 12px;
+                vertical-stretch: 0;
+                badge-txt := Text {
+                    text: cell.lesson-type == 1 ? "odwołane" : "przeniesione";
+                    font-size: 9px; font-weight: 700; color: #fca5a5;
+                    horizontal-alignment: center; vertical-alignment: center;
+                }
+            }
+        }
+
+        // Subject - allow wrapping so row scales
         Text {
-            text: lesson.subject;
+            text: cell.subject;
             font-weight: 700;
             font-size: 13px;
-            color: Theme.foreground;
-            overflow: elide;
+            color: (cell.lesson-type == 1 || cell.lesson-type == 3) ? #777 : Theme.foreground;
+            wrap: word-wrap;
         }
+
+        // Teacher - allow wrapping
         Text {
-            text: lesson.hour_from + " - " + lesson.hour_to;
-            font-size: 11px;
-            color: Theme.muted-foreground;
+            text: cell.teacher;
+            font-size: 10px;
+            color: #777;
+            wrap: word-wrap;
         }
-        HorizontalBox {
-             Text {
-                 text: lesson.teacher;
-                 font-size: 11px;
-                 color: Theme.muted-foreground;
-                 overflow: elide;
-                 horizontal-stretch: 1;
-             }
-             Text {
-                 text: lesson.room == "" ? "" : "[" + lesson.room + "]";
-                 font-size: 11px;
-                 color: Theme.muted-foreground;
-             }
+
+        // Room tag
+        if cell.room != "" && cell.room != "-" : HorizontalBox {
+            spacing: 0px; vertical-stretch: 0; alignment: start;
+            Rectangle {
+                background: #ffffff10;
+                border-radius: 3px;
+                height: 17px;
+                width: room-t.preferred-width + 12px;
+                vertical-stretch: 0;
+                room-t := Text {
+                    text: "s. " + cell.room;
+                    font-size: 9px; font-weight: 500; color: #999;
+                    horizontal-alignment: center; vertical-alignment: center;
+                }
+            }
         }
-        
-        if lesson.event_content != "" : Rectangle {
-            background: Theme.accent;
-            border-radius: 4px;
-            height: 16px; // Indicator
-            vertical-stretch: 0;
+
+        // Change info - allow wrapping
+        if cell.change-info != "" : HorizontalBox {
+            padding: 0px; spacing: 4px; alignment: start;
+            Rectangle {
+                width: 10px;
+                IconDisplay { icon: IconSet.CornerDownRight; size: 10px; stroke-width: 2.0; stroke: (cell.lesson-type == 2 || cell.lesson-type == 4) ? #fbbf24 : #f87171; y: 2px;}
+            }
             Text {
-                 text: "!";
-                 color: Theme.foreground;
-                 font-weight: 700;
-                 x: 4px; y: 0px;
+                text: cell.change-info;
+                font-size: 9px;
+                color: (cell.lesson-type == 2 || cell.lesson-type == 4) ? #fbbf24 : #f87171;
+                wrap: word-wrap;
+            }
+        }
+
+        // Event indicator
+        if cell.event-content != "" : HorizontalBox {
+            spacing: 0px; vertical-stretch: 0; alignment: start;
+            Rectangle {
+                background: #2563eb;
+                border-radius: 3px;
+                height: 14px; width: 14px; vertical-stretch: 0;
+                Text { text: "!"; color: white; font-weight: 700; font-size: 9px; horizontal-alignment: center; vertical-alignment: center; }
             }
         }
     }
 }
 
+// ── Main View ───────────────────────────────────────────────────────────
+
 export component TimetableView inherits Rectangle {
-    in property <[UIDay]> days;
-    in property <string> week_range: "Loading...";
-    callback prev_week();
-    callback next_week();
+    in property <[UIGridRow]> grid-rows;
+    in property <[string]> day-headers;
+    in property <string> week-range: "Ładowanie...";
+    in property <int> today-col-index: -1;
+    callback prev-week();
+    callback next-week();
 
     background: Theme.background;
-    
-    property <bool> overlay_open: false;
-    property <UILesson> selected_lesson;
+
+    property <bool> overlay-open: false;
+    property <UIGridCell> selected-cell;
+
+    property <length> nr-col-width: 24px;
+    property <length> hour-col-width: 52px;
+    property <length> day-col-width: (root.width - nr-col-width - hour-col-width) / max(1, root.day-headers.length);
 
     VerticalBox {
-        padding: Theme.padding;
-        spacing: Theme.gap;
+        padding: 0px;
+        spacing: 0px;
 
-        // Header
+        // Week navigation
         HorizontalBox {
             alignment: center;
-            spacing: Theme.gap;
+            spacing: 8px;
             vertical-stretch: 0;
-            Button {
-                text: "<";
-                width: 40px;
-                clicked => { root.prev_week(); }
+            height: 36px;
+            Rectangle {
+                width: 36px; height: 24px;
+                background: ta1.pressed ? Theme.secondary : transparent;
+                border-radius: Theme.radius;
+                ta1 := TouchArea {
+                    clicked => { root.prev-week(); }
+                    HorizontalBox {
+                        alignment: center; vertical-stretch: 1; horizontal-stretch: 1; padding: 0px; spacing: 0px;
+                        IconDisplay { icon: IconSet.ChevronLeft; size: 16px; stroke-width: 2.3; stroke: Theme.foreground; }
+                    }
+                }
             }
             Text {
-                text: root.week_range;
-                font-size: 18px;
+                text: root.week-range;
+                font-size: 16px;
+                font-weight: 600;
                 color: Theme.foreground;
                 vertical-alignment: center;
             }
-            Button {
-                text: ">";
-                width: 40px;
-                clicked => { root.next_week(); }
+            Rectangle {
+                width: 36px; height: 24px;
+                background: ta2.pressed ? Theme.secondary : transparent;
+                border-radius: Theme.radius;
+                ta2 := TouchArea {
+                    clicked => { root.next-week(); }
+                    HorizontalBox {
+                        alignment: center; vertical-stretch: 1; horizontal-stretch: 1; padding: 0px; spacing: 0px;
+                        IconDisplay { icon: IconSet.ChevronRight; size: 16px; stroke-width: 2.3; stroke: Theme.foreground; }
+                    }
+                }
             }
         }
 
-        // Days Grid
+        // Grid
         ScrollView {
-            HorizontalBox {
-                spacing: Theme.gap;
+            VerticalBox {
+                spacing: 0px;
+                padding: 0px;
                 alignment: start;
-                for day in root.days : VerticalBox {
-                    width: 200px;
-                    spacing: 8px;
-                    alignment: start;
 
-                    // Day Header
+                // Header row
+                HorizontalBox {
+                    spacing: 0px;
+                    padding: 0px;
+                    vertical-stretch: 0;
+
                     Rectangle {
-                        height: 36px;
-                        background: Theme.muted;
-                        border-radius: Theme.radius;
-                        vertical-stretch: 0;
+                        width: nr-col-width; height: 26px;
+                        background: Theme.muted; border-width: 0px;
+                        horizontal-stretch: 0;
+                        Text { text: "Nr"; font-size: 10px; font-weight: 600; color: Theme.muted-foreground; horizontal-alignment: center; vertical-alignment: center; }
+                    }
+
+                    Rectangle {
+                        width: hour-col-width; height: 26px;
+                        background: Theme.muted; border-width: 0px;
+                        horizontal-stretch: 0;
+                        Text { text: "Godz."; font-size: 10px; font-weight: 600; color: Theme.muted-foreground; horizontal-alignment: center; vertical-alignment: center; }
+                    }
+
+                    for day[idx] in root.day-headers : Rectangle {
+                        height: 26px;
+                        width: day-col-width;
+                        background: idx == root.today-col-index ? #ffffff12 : Theme.muted;
+                        border-width: 0px;
+                        if idx == root.today-col-index : Rectangle {
+                            y: parent.height - 2px;
+                            height: 2px;
+                            background: #3b82f6;
+                        }
                         Text {
-                            text: day.name + " " + day.date;
+                            text: day;
+                            font-size: 10px;
+                            font-weight: idx == root.today-col-index ? 700 : 600;
+                            color: idx == root.today-col-index ? #93c5fd : Theme.muted-foreground;
                             horizontal-alignment: center;
                             vertical-alignment: center;
-                            font-weight: 600;
-                            color: Theme.muted-foreground;
+                        }
+                    }
+                }
+
+                // Body rows
+                for row in root.grid-rows : HorizontalBox {
+                    spacing: 0px;
+                    padding: 0px;
+                    vertical-stretch: 0;
+                    min-height: 62px;
+
+                    Rectangle {
+                        width: nr-col-width; 
+                        background: Theme.muted; border-width: 0px;
+                        horizontal-stretch: 0;
+                        Text { text: row.no; font-size: 11px; font-weight: 600; color: Theme.muted-foreground; horizontal-alignment: center; vertical-alignment: center; }
+                    }
+
+                    Rectangle {
+                        width: hour-col-width; 
+                        background: Theme.muted; border-width: 0px;
+                        horizontal-stretch: 0;
+                        VerticalBox {
+                            alignment: center; padding: 2px; spacing: 0px;
+                            Text { text: row.hour-from; font-size: 10px; font-weight: 500; color: Theme.muted-foreground; horizontal-alignment: center; }
+                            Text { text: row.hour-to; font-size: 9px; color: #666; horizontal-alignment: center; }
                         }
                     }
 
-                    // Lessons
-                    for lesson in day.lessons : LessonItem {
-                        lesson: lesson;
+                    for cell[idx] in row.cells : GridCell {
+                        cell: cell;
+                        is-today: idx == root.today-col-index;
+                        width: day-col-width;
                         clicked => {
-                            root.selected_lesson = lesson;
-                            root.overlay_open = true;
+                            root.selected-cell = cell;
+                            root.overlay-open = true;
                         }
                     }
                 }
             }
         }
     }
-    
+
     LessonPopover {
-        open: root.overlay_open;
-        lesson: root.selected_lesson;
-        close => { root.overlay_open = false; }
+        open: root.overlay-open;
+        cell: root.selected-cell;
+        close => { root.overlay-open = false; }
     }
 }

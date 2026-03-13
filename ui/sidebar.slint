@@ -1,43 +1,8 @@
 import { Theme } from "style.slint";
 import { VerticalBox, HorizontalBox, Button } from "std-widgets.slint";
+import { IconDisplay, IconSet } from "@lucide";
 
-component NavButton inherits Rectangle {
-    in property <string> text;
-    in property <string> icon;
-    in property <bool> active;
-    callback clicked;
-    
-    background: active ? Theme.primary : transparent;
-    border-radius: Theme.radius;
-    height: 40px;
 
-    TouchArea {
-        clicked => { root.clicked(); }
-        width: 100%;
-        height: 100%;
-        
-        HorizontalBox {
-            padding-left: 12px;
-            padding-right: 12px;
-            spacing: 12px;
-            alignment: start;
-            
-            Text {
-                text: root.icon;
-                font-size: 16px;
-                color: active ? Theme.primary-foreground : Theme.muted-foreground;
-                vertical-alignment: center;
-            }
-            
-            Text {
-                text: root.text;
-                font-size: 14px;
-                color: active ? Theme.primary-foreground : Theme.muted-foreground;
-                vertical-alignment: center;
-            }
-        }
-    }
-}
 
 export component Sidebar inherits Rectangle {
     in property <int> active-page;
@@ -79,47 +44,82 @@ export component Sidebar inherits Rectangle {
             alignment: start;
             spacing: 4px;
             
-            NavButton {
-                text: "Dashboard";
-                icon: "🏠";
-                active: root.active-page == 1;
-                clicked => { root.navigate(1); }
+            Rectangle {
+                height: 40px; background: root.active-page == 1 ? Theme.primary : transparent; border-radius: Theme.radius;
+                TouchArea {
+                    clicked => { root.navigate(1); }
+                    HorizontalBox {
+                        padding-left: 12px; padding-right: 12px; spacing: 12px; alignment: start;
+                        Rectangle { width: 20px; IconDisplay { icon: IconSet.LayoutDashboard; size: 20px; stroke-width: 2.3; stroke: root.active-page == 1 ? Theme.primary-foreground : Theme.muted-foreground; y: (parent.height - self.height) / 2; } }
+                        Text { text: "Dashboard"; font-size: 14px; color: root.active-page == 1 ? Theme.primary-foreground : Theme.muted-foreground; vertical-alignment: center; }
+                    }
+                }
             }
-            NavButton {
-                text: "Plan zajęć";
-                icon: "📅";
-                active: root.active-page == 2;
-                clicked => { root.navigate(2); }
+            Rectangle {
+                height: 40px; background: root.active-page == 2 ? Theme.primary : transparent; border-radius: Theme.radius;
+                TouchArea {
+                    clicked => { root.navigate(2); }
+                    HorizontalBox {
+                        padding-left: 12px; padding-right: 12px; spacing: 12px; alignment: start;
+                        Rectangle { width: 20px; IconDisplay { icon: IconSet.CalendarDays; size: 20px; stroke-width: 2.3; stroke: root.active-page == 2 ? Theme.primary-foreground : Theme.muted-foreground; y: (parent.height - self.height) / 2; } }
+                        Text { text: "Plan zajęć"; font-size: 14px; color: root.active-page == 2 ? Theme.primary-foreground : Theme.muted-foreground; vertical-alignment: center; }
+                    }
+                }
             }
-            NavButton {
-                text: "Oceny";
-                icon: "🎓";
-                active: root.active-page == 3;
-                clicked => { root.navigate(3); }
+            Rectangle {
+                height: 40px; background: root.active-page == 3 ? Theme.primary : transparent; border-radius: Theme.radius;
+                TouchArea {
+                    clicked => { root.navigate(3); }
+                    HorizontalBox {
+                        padding-left: 12px; padding-right: 12px; spacing: 12px; alignment: start;
+                        Rectangle { width: 20px; IconDisplay { icon: IconSet.GraduationCap; size: 20px; stroke-width: 2.3; stroke: root.active-page == 3 ? Theme.primary-foreground : Theme.muted-foreground; y: (parent.height - self.height) / 2; } }
+                        Text { text: "Oceny"; font-size: 14px; color: root.active-page == 3 ? Theme.primary-foreground : Theme.muted-foreground; vertical-alignment: center; }
+                    }
+                }
             }
-            NavButton {
-                text: "Ogłoszenia";
-                icon: "🔔";
-                active: root.active-page == 4;
-                clicked => { root.navigate(4); }
+            Rectangle {
+                height: 40px; background: root.active-page == 4 ? Theme.primary : transparent; border-radius: Theme.radius;
+                TouchArea {
+                    clicked => { root.navigate(4); }
+                    HorizontalBox {
+                        padding-left: 12px; padding-right: 12px; spacing: 12px; alignment: start;
+                        Rectangle { width: 20px; IconDisplay { icon: IconSet.Bell; size: 20px; stroke-width: 2.3; stroke: root.active-page == 4 ? Theme.primary-foreground : Theme.muted-foreground; y: (parent.height - self.height) / 2; } }
+                        Text { text: "Ogłoszenia"; font-size: 14px; color: root.active-page == 4 ? Theme.primary-foreground : Theme.muted-foreground; vertical-alignment: center; }
+                    }
+                }
             }
-            NavButton {
-                text: "Frekwencja";
-                icon: "📋";
-                active: root.active-page == 5;
-                clicked => { root.navigate(5); }
+            Rectangle {
+                height: 40px; background: root.active-page == 5 ? Theme.primary : transparent; border-radius: Theme.radius;
+                TouchArea {
+                    clicked => { root.navigate(5); }
+                    HorizontalBox {
+                        padding-left: 12px; padding-right: 12px; spacing: 12px; alignment: start;
+                        Rectangle { width: 20px; IconDisplay { icon: IconSet.ClipboardList; size: 20px; stroke-width: 2.3; stroke: root.active-page == 5 ? Theme.primary-foreground : Theme.muted-foreground; y: (parent.height - self.height) / 2; } }
+                        Text { text: "Frekwencja"; font-size: 14px; color: root.active-page == 5 ? Theme.primary-foreground : Theme.muted-foreground; vertical-alignment: center; }
+                    }
+                }
             }
-            NavButton {
-                text: "Wiadomości";
-                icon: "✉️";
-                active: root.active-page == 6;
-                clicked => { root.navigate(6); }
+            Rectangle {
+                height: 40px; background: root.active-page == 6 ? Theme.primary : transparent; border-radius: Theme.radius;
+                TouchArea {
+                    clicked => { root.navigate(6); }
+                    HorizontalBox {
+                        padding-left: 12px; padding-right: 12px; spacing: 12px; alignment: start;
+                        Rectangle { width: 20px; IconDisplay { icon: IconSet.Mail; size: 20px; stroke-width: 2.3; stroke: root.active-page == 6 ? Theme.primary-foreground : Theme.muted-foreground; y: (parent.height - self.height) / 2; } }
+                        Text { text: "Wiadomości"; font-size: 14px; color: root.active-page == 6 ? Theme.primary-foreground : Theme.muted-foreground; vertical-alignment: center; }
+                    }
+                }
             }
-            NavButton {
-                text: "Zadania domowe";
-                icon: "📝";
-                active: root.active-page == 7;
-                clicked => { root.navigate(7); }
+            Rectangle {
+                height: 40px; background: root.active-page == 7 ? Theme.primary : transparent; border-radius: Theme.radius;
+                TouchArea {
+                    clicked => { root.navigate(7); }
+                    HorizontalBox {
+                        padding-left: 12px; padding-right: 12px; spacing: 12px; alignment: start;
+                        Rectangle { width: 20px; IconDisplay { icon: IconSet.StickyNote; size: 20px; stroke-width: 2.3; stroke: root.active-page == 7 ? Theme.primary-foreground : Theme.muted-foreground; y: (parent.height - self.height) / 2; } }
+                        Text { text: "Zadania domowe"; font-size: 14px; color: root.active-page == 7 ? Theme.primary-foreground : Theme.muted-foreground; vertical-alignment: center; }
+                    }
+                }
             }
         }
         

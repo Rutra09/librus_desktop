@@ -1,5 +1,12 @@
 fn main() {
-    slint_build::compile("ui/app.slint").unwrap();
+    let mut library = std::collections::HashMap::new();
+    library.insert(
+        "lucide".to_string(),
+        std::path::PathBuf::from(lucide_slint::lib()),
+    );
+    let config = slint_build::CompilerConfiguration::new().with_library_paths(library);
+
+    slint_build::compile_with_config("ui/app.slint", config).unwrap();
 
     let target_os = std::env::var("CARGO_CFG_TARGET_OS").unwrap_or_default();
     if target_os == "windows" {

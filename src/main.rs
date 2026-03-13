@@ -348,10 +348,9 @@ async fn fetch_timetable_data(client: LibrusClient, window_weak: slint::Weak<Mai
         // Process events
         let mut events_map: HashMap<(String, i32), Vec<(String, String)>> = HashMap::new();
         if let Ok(events) = events_res {
-            let event_cats = state.event_categories.lock().await; // Lock once
+            let event_cats = state.event_categories.lock().await;
             for e in events {
                 if let Some(date) = &e.date {
-                    // Filter by range? For now just map all, map lookup handles it.
                     let l_no = e.lesson_no.unwrap_or(0);
                     let cat_id = e.category.as_ref().and_then(|c| c.id).unwrap_or(0);
                     let cat_name = event_cats.get(&cat_id).cloned().unwrap_or("?".to_string());
@@ -364,33 +363,163 @@ async fn fetch_timetable_data(client: LibrusClient, window_weak: slint::Weak<Mai
             }
         }
         
-        let mut raw_days = Vec::new();
-        
         // Cache locks
         let subjects_map = state.subjects.lock().await;
         let teachers_map = state.teachers.lock().await;
         let classrooms_map = state.classrooms.lock().await;
 
-        for (date_str, lessons) in parsed_days {
-            let mut ui_lessons = Vec::new();
-            for l in lessons {
-                let subject_name = l.subject.as_ref().map(|s| {
-                    let id = s.id.unwrap_or(0);
-                    subjects_map.get(&id).cloned().unwrap_or(format!("Subject {}", id))
-                }).unwrap_or("?".into());
+        // Helper closures
+        let resolve_subject = |id_ref: &Option<librus_front::api::models::IdRef>| -> String {
+            id_ref.as_ref().map(|s| {
+                let id = s.id.unwrap_or(0);
+                subjects_map.get(&id).cloned().unwrap_or(format!("Subject {}", id))
+            }).unwrap_or("?".into())
+        };
+        let resolve_teacher = |id_ref: &Option<librus_front::api::models::IdRef>| -> String {
+            id_ref.as_ref().map(|t| {
+                let id = t.id.unwrap_or(0);
+                teachers_map.get(&id).cloned().unwrap_or(format!("Teacher {}", id))
+            }).unwrap_or("?".into())
+        };
+        let resolve_room = |id_ref: &Option<librus_front::api::models::IdRef>| -> String {
+            id_ref.as_ref().and_then(|c| c.id).map(|id| {
+                classrooms_map.get(&id).and_then(|r| r.name.clone().or(r.symbol.clone()))
+                    .unwrap_or(format!("{}", id))
+            }).unwrap_or("-".into())
+        };
 
-                let teacher_name = l.teacher.as_ref().map(|t| {
-                    let id = t.id.unwrap_or(0);
-                    teachers_map.get(&id).cloned().unwrap_or(format!("Teacher {}", id))
-                }).unwrap_or("?".into());
-                
-                let room_name = l.classroom.as_ref().and_then(|c| c.id).map(|id| {
-                    classrooms_map.get(&id).and_then(|r| r.name.clone().or(r.symbol.clone()))
-                        .unwrap_or(format!("{}", id))
-                }).unwrap_or("-".into());
+        // Build grid: slot_no -> day_index -> UIGridCell
+        // day_index is 0=Mon .. 4=Fri based on parsed date position
+        let mut day_headers: Vec<String> = Vec::new();
+        let mut date_to_day_idx: HashMap<String, usize> = HashMap::new();
+
+        // Sort dates and assign day indices, filtering empty weekends
+        let mut sorted_dates: Vec<String> = parsed_days.iter().map(|(d, _)| d.clone()).collect();
+        sorted_dates.sort();
+        
+        // Filter out Sat/Sun that have no lessons
+        sorted_dates.retain(|date_str| {
+            if let Ok(d) = NaiveDate::parse_from_str(date_str, "%Y-%m-%d") {
+                let weekday = d.weekday();
+                if weekday == chrono::Weekday::Sat || weekday == chrono::Weekday::Sun {
+                    // Keep only if this day has actual lessons
+                    parsed_days.iter()
+                        .find(|(ds, _)| ds == date_str)
+                        .map(|(_, lessons)| !lessons.is_empty())
+                        .unwrap_or(false)
+                } else {
+                    true // Always keep weekdays
+                }
+            } else {
+                true
+            }
+        });
+
+        for (i, date_str) in sorted_dates.iter().enumerate() {
+            date_to_day_idx.insert(date_str.clone(), i);
+            let header = if let Ok(d) = NaiveDate::parse_from_str(date_str, "%Y-%m-%d") {
+                let day_name = match d.weekday() {
+                    chrono::Weekday::Mon => "Pon",
+                    chrono::Weekday::Tue => "Wt",
+                    chrono::Weekday::Wed => "Śr",
+                    chrono::Weekday::Thu => "Czw",
+                    chrono::Weekday::Fri => "Pt",
+                    chrono::Weekday::Sat => "Sob",
+                    chrono::Weekday::Sun => "Nd",
+                };
+                format!("{} {}", day_name, d.format("%d.%m"))
+            } else {
+                format!("Dzień {}", i + 1)
+            };
+            day_headers.push(header);
+        }
+
+        let num_days = day_headers.len();
+        // slot_no -> (hour_from, hour_to, [UIGridCell; num_days])
+        let mut grid: HashMap<i32, (String, String, Vec<UIGridCell>)> = HashMap::new();
+
+        for (date_str, lessons) in &parsed_days {
+            let day_idx = *date_to_day_idx.get(date_str).unwrap_or(&0);
+
+            for l in lessons {
+                let lesson_no = l.lesson_no.unwrap_or(0);
+                let is_sub = l.is_substitution_class.unwrap_or(false);
+                let is_can = l.is_canceled.unwrap_or(false);
+
+                let subject_name = resolve_subject(&l.subject);
+                let teacher_name = resolve_teacher(&l.teacher);
+                let room_name = resolve_room(&l.classroom);
+                let hour_from = l.hour_from.clone().unwrap_or_default();
+                let hour_to = l.hour_to.clone().unwrap_or_default();
+
+                // Classify lesson type (Szkolny logic)
+                let (lesson_type, change_info) = if is_sub && is_can {
+                    // Shifted source: lesson moved away from this slot
+                    let info = if let Some(new_date) = &l.new_date {
+                        let new_no = l.new_lesson_no.unwrap_or(0);
+                        format!("→ {} #{}", new_date, new_no)
+                    } else {
+                        String::new()
+                    };
+                    (3i32, info) // TYPE_SHIFTED_SOURCE
+                } else if is_sub && !is_can {
+                    // Check if it's a change (same slot) or shifted target (different slot)
+                    let org_date = l.org_date.as_deref().unwrap_or("");
+                    let org_lesson_no = l.org_lesson_no.unwrap_or(lesson_no);
+                    
+                    if org_date == date_str.as_str() && org_lesson_no == lesson_no {
+                        // TYPE_CHANGE: same slot, teacher/subject changed
+                        let mut parts = Vec::new();
+                        if let Some(oid) = l.org_subject.as_ref().and_then(|x| x.id) {
+                            if let Some(name) = subjects_map.get(&oid) {
+                                parts.push(name.clone());
+                            }
+                        }
+                        if let Some(tid) = l.org_teacher.as_ref().and_then(|x| x.id) {
+                            if let Some(t) = teachers_map.get(&tid) {
+                                parts.push(format!("({})", t));
+                            }
+                        }
+                        let info = if !parts.is_empty() {
+                            format!("było: {}", parts.join(" "))
+                        } else {
+                            String::new()
+                        };
+                        (2, info) // TYPE_CHANGE
+                    } else {
+                        // TYPE_SHIFTED_TARGET: lesson moved here from another slot
+                        let info = if !org_date.is_empty() {
+                            format!("← {} #{}", org_date, org_lesson_no)
+                        } else {
+                            // Fallback: just show original info
+                            let mut parts = Vec::new();
+                            if let Some(oid) = l.org_subject.as_ref().and_then(|x| x.id) {
+                                if let Some(name) = subjects_map.get(&oid) {
+                                    parts.push(name.clone());
+                                }
+                            }
+                            if let Some(tid) = l.org_teacher.as_ref().and_then(|x| x.id) {
+                                if let Some(t) = teachers_map.get(&tid) {
+                                    parts.push(format!("({})", t));
+                                }
+                            }
+                            if !parts.is_empty() {
+                                format!("było: {}", parts.join(" "))
+                            } else {
+                                String::new()
+                            }
+                        };
+                        (4, info) // TYPE_SHIFTED_TARGET
+                    }
+                } else if is_can {
+                    // TYPE_CANCELLED: plain cancellation
+                    (1, String::new())
+                } else {
+                    // TYPE_NORMAL
+                    (0, String::new())
+                };
 
                 // Lookup event
-                let lesson_no = l.lesson_no.unwrap_or(0);
                 let (event_content, event_category) = if let Some(evs) = events_map.get(&(date_str.clone(), lesson_no)) {
                     let contents = evs.iter().map(|(_, c)| c.clone()).collect::<Vec<_>>().join("\n");
                     let categories = evs.iter().map(|(c, _)| c.clone()).collect::<Vec<_>>().join(", ");
@@ -399,70 +528,102 @@ async fn fetch_timetable_data(client: LibrusClient, window_weak: slint::Weak<Mai
                     ("".to_string(), "".to_string())
                 };
 
-                // Substitution Details
-                let mut substitution_desc = String::new();
-                if l.is_substitution_class.unwrap_or(false) {
-                    let mut parts = Vec::new();
-                    if let Some(oid) = l.org_subject.as_ref().and_then(|x| x.id) {
-                         if let Some(name) = subjects_map.get(&oid) {
-                             parts.push(name.clone());
-                         }
-                    }
-                    if let Some(tid) = l.org_teacher.as_ref().and_then(|x| x.id) {
-                        if let Some(t) = teachers_map.get(&tid) {
-                            parts.push(format!("({})", t));
-                        }
-                    }
-                    if !parts.is_empty() {
-                        substitution_desc = parts.join(" ");
-                    }
-                }
-
-                // Push Lesson
-                ui_lessons.push(UILesson {
-                    id: l.id.unwrap_or(0) as i32,
-                    no: l.lesson_no.unwrap_or(0),
+                let cell = UIGridCell {
+                    has_lesson: true,
                     subject: subject_name.into(),
                     teacher: teacher_name.into(),
                     room: room_name.into(),
-                    color: slint::Color::from_argb_encoded(0xff_ffffff).into(), // Default Brush
-                    is_substitution: l.is_substitution_class.unwrap_or(false),
-                    is_canceled: l.is_canceled.unwrap_or(false),
-                    hour_from: l.hour_from.clone().unwrap_or_default().into(),
-                    hour_to: l.hour_to.clone().unwrap_or_default().into(),
+                    hour_from: hour_from.clone().into(),
+                    hour_to: hour_to.clone().into(),
+                    lesson_type: lesson_type,
                     event_content: event_content.into(),
                     event_category: event_category.into(),
-                    substitution_desc: substitution_desc.into(),
+                    change_info: change_info.into(),
+                };
+
+                let entry = grid.entry(lesson_no).or_insert_with(|| {
+                    let empty_cells: Vec<UIGridCell> = (0..num_days).map(|_| UIGridCell {
+                        has_lesson: false,
+                        subject: "".into(),
+                        teacher: "".into(),
+                        room: "".into(),
+                        hour_from: "".into(),
+                        hour_to: "".into(),
+                        lesson_type: 0,
+                        event_content: "".into(),
+                        event_category: "".into(),
+                        change_info: "".into(),
+                    }).collect();
+                    (hour_from.clone(), hour_to.clone(), empty_cells)
                 });
+
+                // Update hour range if needed
+                if entry.0.is_empty() && !hour_from.is_empty() {
+                    entry.0 = hour_from;
+                    entry.1 = hour_to;
+                }
+
+                if day_idx < entry.2.len() {
+                    entry.2[day_idx] = cell;
+                }
             }
-            
-            let day_name = if let Ok(d) = NaiveDate::parse_from_str(&date_str, "%Y-%m-%d") {
-                 d.weekday().to_string()
-            } else {
-                "Day".to_string()
-            };
-            
-            raw_days.push((date_str, day_name, ui_lessons));
         }
         
-        // Update UI
-        let _ = slint::invoke_from_event_loop(move || {
-            // Construct ModelRc here (on UI thread)
-            let mut ui_days = Vec::new();
-            for (date, name, lessons) in raw_days {
-                ui_days.push(UIDay {
-                    date: date.into(),
-                    name: name.into(),
-                    lessons: std::rc::Rc::new(slint::VecModel::from(lessons)).into(),
-                });
-            }
-            let days_model = std::rc::Rc::new(slint::VecModel::from(ui_days));
+        // Sort by slot number and collect raw data (no ModelRc yet – those are not Send)
+        let mut slot_numbers: Vec<i32> = grid.keys().cloned().collect();
+        slot_numbers.sort();
 
+        let mut raw_rows: Vec<(i32, String, String, Vec<UIGridCell>)> = Vec::new();
+        for slot_no in slot_numbers {
+            if let Some((hour_from, hour_to, cells)) = grid.remove(&slot_no) {
+                raw_rows.push((slot_no, hour_from, hour_to, cells));
+            }
+        }
+
+        // Build day headers as plain strings (Send)
+        let ui_day_headers: Vec<slint::SharedString> = day_headers.into_iter().map(|s| s.into()).collect();
+
+        // Determine today's column index
+        let today_str = chrono::Local::now().format("%Y-%m-%d").to_string();
+        let today_col: i32 = sorted_dates.iter()
+            .position(|d| d == &today_str)
+            .map(|p| p as i32)
+            .unwrap_or(-1);
+
+        // Update UI – construct ModelRc on the UI thread
+        let _ = slint::invoke_from_event_loop(move || {
             if let Some(window) = window_weak.upgrade() {
-                window.set_timetable_schedule(days_model.into());
+                let ui_rows: Vec<UIGridRow> = raw_rows.into_iter().map(|(no, hf, ht, cells)| {
+                    UIGridRow {
+                        no,
+                        hour_from: hf.into(),
+                        hour_to: ht.into(),
+                        cells: std::rc::Rc::new(slint::VecModel::from(cells)).into(),
+                    }
+                }).collect();
+
+                let rows_model = std::rc::Rc::new(slint::VecModel::from(ui_rows));
+                let headers_model = std::rc::Rc::new(slint::VecModel::from(ui_day_headers));
+                window.set_timetable_grid_rows(rows_model.into());
+                window.set_timetable_day_headers(headers_model.into());
                 window.set_timetable_week_range(week_start_str.into());
+                window.set_timetable_today_col(today_col);
             }
         });
+    }
+}
+
+/// Silently prefetch adjacent weeks to warm cache for smooth navigation
+fn prefetch_adjacent_weeks(client: LibrusClient, week_start_str: &str) {
+    if let Ok(base_date) = NaiveDate::parse_from_str(week_start_str, "%Y-%m-%d") {
+        for offset in &[-14i64, -7, 7, 14] {
+            let adj_date = base_date + Duration::days(*offset);
+            let adj_str = adj_date.format("%Y-%m-%d").to_string();
+            let client_clone = client.clone();
+            tokio::spawn(async move {
+                let _ = client_clone.fetch_timetable(&adj_str).await;
+            });
+        }
     }
 }
 
@@ -928,7 +1089,8 @@ async fn main() -> Result<()> {
                      window.set_active_page(0);
                      window.set_user_name("...".into());
                      window.set_lucky_number("-".into());
-                     window.set_timetable_schedule(std::rc::Rc::new(slint::VecModel::from(vec![])).into());
+                     window.set_timetable_grid_rows(std::rc::Rc::new(slint::VecModel::from(vec![] as Vec<UIGridRow>)).into());
+                     window.set_timetable_day_headers(std::rc::Rc::new(slint::VecModel::from(vec![] as Vec<slint::SharedString>)).into());
                  }
              });
         });
@@ -951,9 +1113,9 @@ async fn main() -> Result<()> {
                 let state_copy = state.clone();
                 drop(state); 
 
-                // Get date
                 let d = week_start_mutex.lock().await.clone();
-                fetch_timetable_data(client_clone, main_window_weak.clone(), d, state_copy).await;
+                fetch_timetable_data(client_clone.clone(), main_window_weak.clone(), d.clone(), state_copy).await;
+                prefetch_adjacent_weeks(client_clone, &d);
 
                 // Navigate
                 let _ = slint::invoke_from_event_loop(move || {
@@ -1104,7 +1266,8 @@ async fn main() -> Result<()> {
                     date_lock.push_str(&new_date_str);
                     drop(date_lock); // unlock
 
-                    fetch_timetable_data(client_clone, main_window_weak.clone(), new_date_str, state_copy).await;
+                    fetch_timetable_data(client_clone.clone(), main_window_weak.clone(), new_date_str.clone(), state_copy).await;
+                    prefetch_adjacent_weeks(client_clone, &new_date_str);
                 }
             }
         });
@@ -1133,7 +1296,8 @@ async fn main() -> Result<()> {
                     date_lock.push_str(&new_date_str);
                     drop(date_lock);
 
-                    fetch_timetable_data(client_clone, main_window_weak.clone(), new_date_str, state_copy).await;
+                    fetch_timetable_data(client_clone.clone(), main_window_weak.clone(), new_date_str.clone(), state_copy).await;
+                    prefetch_adjacent_weeks(client_clone, &new_date_str);
                 }
             }
         });

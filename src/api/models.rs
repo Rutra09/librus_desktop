@@ -39,6 +39,14 @@ pub struct Lesson {
     pub org_subject: Option<IdRef>,
     #[serde(alias = "OrgTeacher")]
     pub org_teacher: Option<IdRef>,
+    #[serde(alias = "OrgDate")]
+    pub org_date: Option<String>,
+    #[serde(alias = "OrgLessonNo", default, deserialize_with = "deserialize_int")]
+    pub org_lesson_no: Option<i32>,
+    #[serde(alias = "OrgHourFrom")]
+    pub org_hour_from: Option<String>,
+    #[serde(alias = "OrgHourTo")]
+    pub org_hour_to: Option<String>,
     // Shifted lesson data
     #[serde(alias = "NewDate")]
     pub new_date: Option<String>,
@@ -46,6 +54,8 @@ pub struct Lesson {
     pub new_lesson_no: Option<i32>,
     #[serde(alias = "NewHourFrom")]
     pub new_hour_from: Option<String>,
+    #[serde(alias = "NewHourTo")]
+    pub new_hour_to: Option<String>,
 }
 
 // ---------------------------------------------------------------------------
