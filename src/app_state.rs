@@ -17,6 +17,8 @@ pub struct AppState {
     pub teachers: Arc<Mutex<HashMap<i64, String>>>,
     // Grade Categories (ID -> Category)
     pub grade_categories: Arc<Mutex<HashMap<i64, crate::api::models::GradeCategory>>>,
+    // Grade Comments (ID -> Text)
+    pub grade_comments: Arc<Mutex<HashMap<i64, String>>>,
     // Event Categories (ID -> Name)
     pub event_categories: Arc<Mutex<HashMap<i64, String>>>,
     // Attendance Types (ID -> Type)
@@ -38,6 +40,7 @@ impl AppState {
             subjects: Arc::new(Mutex::new(HashMap::new())),
             teachers: Arc::new(Mutex::new(HashMap::new())),
             grade_categories: Arc::new(Mutex::new(HashMap::new())),
+            grade_comments: Arc::new(Mutex::new(HashMap::new())),
             event_categories: Arc::new(Mutex::new(HashMap::new())),
             attendance_types: Arc::new(Mutex::new(HashMap::new())),
             classrooms: Arc::new(Mutex::new(HashMap::new())),

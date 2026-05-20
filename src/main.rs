@@ -88,6 +88,27 @@ async fn fetch_metadata(client: LibrusClient, state: AppState) {
             }
         }
     }
+    // 3.5 Grade Comments
+    match client.fetch_grade_comments().await {
+        Ok(comments) => {
+            println!("Successfully fetched {} grade comments!", comments.len());
+            for c in &comments {
+                if let (Some(id), Some(text)) = (c.id, &c.text) {
+                    println!("Comment [ID: {}]: {}", id, text);
+                }
+            }
+            let mut map = state.grade_comments.lock().await;
+            for c in comments {
+                if let Some(id) = c.id {
+                    let text = c.text.unwrap_or_default();
+                    map.insert(id, text);
+                }
+            }
+        }
+        Err(e) => {
+            println!("Failed to fetch grade comments: {:?}", e);
+        }
+    }
     // 4. Attendance Types
     if let Ok(types) = client.fetch_attendance_types().await {
         let mut map = state.attendance_types.lock().await;
@@ -208,6 +229,7 @@ async fn fetch_grades_data(client: LibrusClient, window_weak: slint::Weak<MainWi
 
 async fn update_grades_ui(window_weak: slint::Weak<MainWindow>, state: AppState) {
     let categories_map = state.grade_categories.lock().await;
+    let comments_map = state.grade_comments.lock().await;
     let subjects_map = state.subjects.lock().await;
     let teachers_map = state.teachers.lock().await;
     let grades_list = state.grades.lock().await;
@@ -216,6 +238,7 @@ async fn update_grades_ui(window_weak: slint::Weak<MainWindow>, state: AppState)
     let mut grades_s2: HashMap<i64, Vec<UIGrade>> = HashMap::new();
     let mut sums_s1: HashMap<i64, (f32, f32)> = HashMap::new();
     let mut sums_s2: HashMap<i64, (f32, f32)> = HashMap::new();
+    let mut flat_dashboard_grades: Vec<DashboardGrade> = Vec::new();
 
     for g in grades_list.iter() {
             let subj_id = g.subject.as_ref().and_then(|s| s.id).unwrap_or(0);
@@ -258,6 +281,25 @@ async fn update_grades_ui(window_weak: slint::Weak<MainWindow>, state: AppState)
                 slint::Color::from_rgb_u8(107, 114, 128)
             };
             
+            let mut grade_comment_texts = Vec::new();
+            if let Some(comment_refs) = &g.comments {
+                for comment_ref in comment_refs {
+                    let comment_id = comment_ref.id.unwrap_or(0);
+                    if let Some(comment_text) = comments_map.get(&comment_id) {
+                        grade_comment_texts.push(comment_text.clone());
+                    } else {
+                        println!("Grade has comment ID {}, but it was not found in comments map!", comment_id);
+                    }
+                }
+            }
+            
+            let comment_part = if !grade_comment_texts.is_empty() {
+                format!(" - {}", grade_comment_texts.join(", "))
+            } else {
+                "".to_string()
+            };
+            
+            let comment_text = grade_comment_texts.join(", ");
             let combined_desc = format!("{} ({})", cat_name, teacher_name);
             
             // Format weight (check if integer)
@@ -268,11 +310,12 @@ async fn update_grades_ui(window_weak: slint::Weak<MainWindow>, state: AppState)
             };
 
             let ui_grade = UIGrade {
-                value: val_str.into(),
+                value: val_str.clone().into(),
                 color: color.into(),
                 desc: combined_desc.into(), 
                 date: g.add_date.clone().unwrap_or("-".into()).into(),
                 weight: weight_str.into(),
+                comment: comment_text.into(),
             };
             
             // If simulated, assume semester 2 (current)
@@ -283,7 +326,17 @@ async fn update_grades_ui(window_weak: slint::Weak<MainWindow>, state: AppState)
             } else {
                 grades_s2.entry(subj_id).or_insert(Vec::new()).push(ui_grade);
             }
+
+            let subj_name = subjects_map.get(&subj_id).cloned().unwrap_or(format!("Subject {}", subj_id));
+            flat_dashboard_grades.push(DashboardGrade {
+                subject: subj_name.into(),
+                grade: val_str.clone().into(),
+                date: g.add_date.clone().unwrap_or("-".into()).into(),
+            });
     }
+
+    flat_dashboard_grades.sort_by(|a, b| b.date.cmp(&a.date));
+    flat_dashboard_grades.truncate(5);
 
     let mut all_subjects: HashSet<i64> = HashSet::new();
     all_subjects.extend(grades_s1.keys());
@@ -331,9 +384,11 @@ async fn update_grades_ui(window_weak: slint::Weak<MainWindow>, state: AppState)
                 });
             }
             let model = std::rc::Rc::new(slint::VecModel::from(final_list));
+            let db_model = std::rc::Rc::new(slint::VecModel::from(flat_dashboard_grades));
             
             if let Some(window) = window_weak.upgrade() {
                 window.set_grades_list(model.into());
+                window.set_dashboard_recent_grades(db_model.into());
             }
     });
 }
@@ -433,6 +488,29 @@ async fn fetch_timetable_data(client: LibrusClient, window_weak: slint::Weak<Mai
                 format!("Dzień {}", i + 1)
             };
             day_headers.push(header);
+        }
+
+        let today_str = chrono::Local::now().format("%Y-%m-%d").to_string();
+        
+        let mut next_day_date = String::new();
+        let mut next_day_lessons: Vec<DashboardLesson> = Vec::new();
+        
+        for (d, lessons) in &parsed_days {
+            if d >= &today_str && !lessons.is_empty() {
+                next_day_date = d.clone();
+                for l in lessons {
+                     if l.is_canceled.unwrap_or(false) { continue; }
+                     let subj = resolve_subject(&l.subject);
+                     let h_from = l.hour_from.clone().unwrap_or_default();
+                     let h_to = l.hour_to.clone().unwrap_or_default();
+                     let time = format!("{} - {}", h_from, h_to);
+                     next_day_lessons.push(DashboardLesson {
+                         time: time.into(),
+                         subject: subj.into(),
+                     });
+                }
+                break;
+            }
         }
 
         let num_days = day_headers.len();
@@ -605,10 +683,14 @@ async fn fetch_timetable_data(client: LibrusClient, window_weak: slint::Weak<Mai
 
                 let rows_model = std::rc::Rc::new(slint::VecModel::from(ui_rows));
                 let headers_model = std::rc::Rc::new(slint::VecModel::from(ui_day_headers));
+                let db_tt_model = std::rc::Rc::new(slint::VecModel::from(next_day_lessons));
+
                 window.set_timetable_grid_rows(rows_model.into());
                 window.set_timetable_day_headers(headers_model.into());
                 window.set_timetable_week_range(week_start_str.into());
                 window.set_timetable_today_col(today_col);
+                window.set_dashboard_next_day_timetable(db_tt_model.into());
+                window.set_dashboard_next_day_timetable_date(next_day_date.into());
             }
         });
     }
@@ -648,10 +730,20 @@ async fn fetch_announcements_data(client: LibrusClient, window_weak: slint::Weak
         // Sort by date desc
         ui_notices.sort_by(|a, b| b.date.cmp(&a.date));
 
+        let mut db_notices = Vec::new();
+        for n in ui_notices.iter().take(3) {
+            db_notices.push(DashboardAnnouncement {
+                title: n.subject.clone(),
+                date: n.date.clone(),
+            });
+        }
+
         let _ = slint::invoke_from_event_loop(move || {
              let model = std::rc::Rc::new(slint::VecModel::from(ui_notices));
+             let db_model = std::rc::Rc::new(slint::VecModel::from(db_notices));
              if let Some(window) = window_weak.upgrade() {
                  window.set_announcements_list(model.into());
+                 window.set_dashboard_recent_announcements(db_model.into());
              }
         });
     }
@@ -936,11 +1028,29 @@ async fn fetch_homework_data(client: LibrusClient, window_weak: slint::Weak<Main
             
             // Sort by date desc
             ui_homeworks.sort_by(|a, b| b.date.cmp(&a.date));
+
+            let today_str = chrono::Local::now().format("%Y-%m-%d").to_string();
+            let mut db_hw = ui_homeworks.clone();
+            // Upcomming means date >= today
+            db_hw.retain(|h| h.date.as_str() >= today_str.as_str());
+            db_hw.sort_by(|a, b| a.date.cmp(&b.date)); // ascending for upcoming
+            db_hw.truncate(3);
+            
+            let mut db_hw_final = Vec::new();
+            for h in db_hw {
+                db_hw_final.push(DashboardHomework {
+                     subject: h.subject.clone(),
+                     content: h.content.clone(),
+                     date: h.date.clone(),
+                });
+            }
             
             let _ = slint::invoke_from_event_loop(move || {
                  let model = std::rc::Rc::new(slint::VecModel::from(ui_homeworks));
+                 let db_model = std::rc::Rc::new(slint::VecModel::from(db_hw_final));
                  if let Some(window) = window_weak.upgrade() {
                      window.set_homework_list(model.into());
+                     window.set_dashboard_upcoming_homework(db_model.into());
                  }
             });
         }
@@ -949,6 +1059,86 @@ async fn fetch_homework_data(client: LibrusClient, window_weak: slint::Weak<Main
             // Fallback to API if sync fails? 
             // For now just error is enough debug info.
         }
+    }
+}
+
+async fn fetch_events_data(client: LibrusClient, window_weak: slint::Weak<MainWindow>, state: AppState) {
+    if let Ok(events) = client.fetch_events().await {
+        let subjects_map = state.subjects.lock().await;
+        let event_cats = state.event_categories.lock().await;
+        let teachers_map = state.teachers.lock().await;
+        
+        let mut upcoming_events = Vec::new();
+        let mut today_events = Vec::new();
+        let mut past_events = Vec::new();
+        
+        let today_str = chrono::Local::now().format("%Y-%m-%d").to_string();
+        
+        for e in events {
+             let subj_id = e.subject.as_ref().and_then(|s| s.id).unwrap_or(0);
+             let subject_name = if let Some(name) = &e.scraped_subject {
+                 name.clone()
+             } else {
+                 subjects_map.get(&subj_id).cloned().unwrap_or("?".to_string())
+             };
+             
+             let cat_id = e.category.as_ref().and_then(|c| c.id).unwrap_or(0);
+             let category_name = if let Some(cat) = &e.scraped_category {
+                 cat.clone()
+             } else {
+                 event_cats.get(&cat_id).cloned().unwrap_or("?".to_string())
+             };
+             
+             let teacher_id = e.created_by.as_ref().and_then(|t| t.id).unwrap_or(0);
+             let teacher_name = if let Some(teacher) = &e.scraped_teacher {
+                 teacher.clone()
+             } else {
+                 teachers_map.get(&teacher_id).cloned().unwrap_or("?".to_string())
+             };
+             
+             let content = e.content.clone().unwrap_or_default();
+             let date = e.date.clone().unwrap_or_default();
+             let lesson_no = e.lesson_no.map(|l| l.to_string()).unwrap_or_default();
+             
+             let ui_event = UIEvent {
+                 subject: subject_name.into(),
+                 content: content.into(),
+                 category: category_name.into(),
+                 date: date.clone().into(),
+                 lesson_no: lesson_no.into(),
+                 teacher: teacher_name.into(),
+             };
+             
+             if date < today_str {
+                 past_events.push(ui_event);
+             } else if date == today_str {
+                 today_events.push(ui_event);
+             } else {
+                 upcoming_events.push(ui_event);
+             }
+        }
+        
+        // Sorting:
+        // Upcoming: ascending (closest first)
+        upcoming_events.sort_by(|a, b| a.date.cmp(&b.date));
+        
+        // Today: ascending
+        today_events.sort_by(|a, b| a.date.cmp(&b.date));
+        
+        // Past: descending (most recent first)
+        past_events.sort_by(|a, b| b.date.cmp(&a.date));
+        
+        let _ = slint::invoke_from_event_loop(move || {
+             let upcoming_model = std::rc::Rc::new(slint::VecModel::from(upcoming_events));
+             let today_model = std::rc::Rc::new(slint::VecModel::from(today_events));
+             let past_model = std::rc::Rc::new(slint::VecModel::from(past_events));
+             
+             if let Some(window) = window_weak.upgrade() {
+                 window.set_events_upcoming(upcoming_model.into());
+                 window.set_events_today(today_model.into());
+                 window.set_events_past(past_model.into());
+             }
+        });
     }
 }
 
@@ -964,9 +1154,10 @@ async fn refresh_all_data(client: LibrusClient, window_weak: slint::Weak<MainWin
     let t5 = fetch_attendances_data(client.clone(), window_weak.clone(), state.clone());
     let t6 = fetch_messages_data(client.clone(), window_weak.clone());
     let t7 = fetch_homework_data(client.clone(), window_weak.clone(), state.clone());
+    let t8 = fetch_events_data(client.clone(), window_weak.clone(), state.clone());
     
     // Wait for all
-    tokio::join!(t1, t2, t3, t4, t5, t6, t7);
+    tokio::join!(t1, t2, t3, t4, t5, t6, t7, t8);
     
     println!("Refresh complete.");
 }
@@ -1058,17 +1249,18 @@ async fn main() -> Result<()> {
                     drop(state);
 
                     let window_weak_success = main_window_weak.clone();
+                    let window_weak_success_clone = window_weak_success.clone();
                     let client_clone = client.clone();
                     
-                    // Fetch metadata then dashboard
-                    fetch_metadata(client_clone.clone(), app_state_copy).await;
-                    fetch_dashboard_data(client_clone, window_weak_success.clone()).await;
-
                     let _ = slint::invoke_from_event_loop(move || {
-                        if let Some(window) = window_weak_success.upgrade() {
+                        if let Some(window) = window_weak_success_clone.upgrade() {
                             window.set_is_logging_in(false);
                             window.set_active_page(1);
                         }
+                    });
+
+                    tokio::spawn(async move {
+                        refresh_all_data(client_clone, window_weak_success, app_state_copy, get_current_monday().format("%Y-%m-%d").to_string()).await;
                     });
                 }
                 Err(e) => {
@@ -1117,8 +1309,6 @@ async fn main() -> Result<()> {
     // removed on_request_timetable
 
     // Grades Callbacks
-    let main_window_weak = main_window.as_weak();
-    let app_state_clone = app_state.clone();
     // removed on_request_grades
 
     // Simulated Grade Callback

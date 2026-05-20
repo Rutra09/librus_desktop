@@ -2,7 +2,7 @@ import { Button, VerticalBox, HorizontalBox } from "std-widgets.slint";
 import { Theme } from "style.slint";
 import { Sidebar } from "sidebar.slint";
 import { LoginView } from "login.slint";
-import { DashboardView } from "dashboard.slint";
+import { DashboardView, DashboardGrade, DashboardHomework, DashboardAnnouncement, DashboardLesson } from "dashboard.slint";
 import { TimetableView, UIGridRow, UIGridCell } from "timetable.slint";
 import { GradesView, UISubjectGrades, UIGrade } from "grades.slint";
 import { AnnouncementsView, UIAnnouncement } from "announcements.slint";
@@ -10,6 +10,7 @@ import { AttendanceView, UIAttendance, UIAttendanceSubject } from "attendance.sl
 
 import { MessagesView, UIMessage } from "messages.slint";
 import { HomeworkView, UIHomework } from "homework.slint";
+import { EventsView, UIEvent } from "events.slint";
 
 export component MainWindow inherits Window {
     title: "Librus Desktop";
@@ -29,6 +30,13 @@ export component MainWindow inherits Window {
     in-out property <string> lucky-number: "";
     in-out property <string> lucky-number-for: "";
     in-out property <string> lucky-number-day: "";
+
+    // Dashboard widgets properties
+    in-out property <[DashboardGrade]> dashboard-recent-grades;
+    in-out property <[DashboardHomework]> dashboard-upcoming-homework;
+    in-out property <[DashboardAnnouncement]> dashboard-recent-announcements;
+    in-out property <[DashboardLesson]> dashboard-next-day-timetable;
+    in-out property <string> dashboard-next-day-timetable-date;
 
     // Timetable properties
     in-out property <[UIGridRow]> timetable-grid-rows;
@@ -64,9 +72,14 @@ export component MainWindow inherits Window {
     callback request-messages();
     callback request-message-details(int);
     
-    // Homewework properties
+    // Homework properties
     in-out property <[UIHomework]> homework-list;
     callback request-homework();
+
+    // Events properties
+    in-out property <[UIEvent]> events-upcoming;
+    in-out property <[UIEvent]> events-today;
+    in-out property <[UIEvent]> events-past;
     
     // Synergia credentials dialog
     in-out property <bool> show-synergia-dialog: false;
@@ -119,6 +132,11 @@ export component MainWindow inherits Window {
                 user-name: user-name;
                 lucky-number: lucky-number;
                 lucky-number-day: lucky-number-day;
+                recent-grades: root.dashboard-recent-grades;
+                upcoming-homework: root.dashboard-upcoming-homework;
+                recent-announcements: root.dashboard-recent-announcements;
+                next-day-timetable: root.dashboard-next-day-timetable;
+                next-day-timetable-date: root.dashboard-next-day-timetable-date;
             }
 
             TimetableView {
@@ -175,6 +193,13 @@ export component MainWindow inherits Window {
                 visible: active-page == 7;
                 homework-list: homework-list;
                 back => { active-page = 1; }
+            }
+            
+            EventsView {
+                visible: active-page == 8;
+                upcoming-events: events-upcoming;
+                today-events: events-today;
+                past-events: events-past;
             }
             
             // Update Dialog Overlay

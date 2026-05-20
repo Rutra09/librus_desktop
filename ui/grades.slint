@@ -7,6 +7,7 @@ export struct UIGrade {
     desc: string,
     date: string,
     weight: string,
+    comment: string,
 }
 
 export struct UISubjectGrades {
@@ -58,9 +59,6 @@ component DetailPopover inherits Rectangle {
         opacity: open ? 1.0 : 0.0;
         animate opacity { duration: 200ms; easing: ease-out; }
         animate y { duration: 200ms; easing: ease-out; }
-        
-        // Block clicks from propagating to backdrop
-        TouchArea {}
 
         content-layout := VerticalBox {
             padding: Theme.padding;
@@ -68,11 +66,12 @@ component DetailPopover inherits Rectangle {
             alignment: center;
 
             // Header
-            Text {
+            TextInput {
                 text: root.subject;
                 font-size: 14px;
                 color: Theme.muted-foreground;
-                font-weight: 500;
+                horizontal-alignment: center;
+                read-only: true;
             }
             
             // Grade Value Display
@@ -97,15 +96,33 @@ component DetailPopover inherits Rectangle {
                 spacing: 8px;
                 alignment: center;
                 
-                TextInput {
+                Text {
                     text: root.grade.desc;
                     font-weight: 600;
                     font-size: 16px;
-                    color: Theme.popover-foreground;
+                    color: Theme.foreground;
                     wrap: word-wrap;
                     horizontal-alignment: center;
-                    read-only: true;
-                    single-line: false;
+                }
+                
+                if root.grade.comment != "" : Rectangle {
+                    background: #1e3a5f;
+                    border-radius: 8px;
+                    width: 280px;
+                    height: 80px;
+                    VerticalBox {
+                        padding: 8px;
+                        ScrollView {
+                            TextInput {
+                                text: root.grade.comment;
+                                font-size: 13px;
+                                color: #93c5fd;
+                                wrap: word-wrap;
+                                read-only: true;
+                                single-line: false;
+                            }
+                        }
+                    }
                 }
                 
                 TextInput {

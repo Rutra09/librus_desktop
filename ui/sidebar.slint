@@ -121,6 +121,17 @@ export component Sidebar inherits Rectangle {
                     }
                 }
             }
+            Rectangle {
+                height: 40px; background: root.active-page == 8 ? Theme.primary : transparent; border-radius: Theme.radius;
+                TouchArea {
+                    clicked => { root.navigate(8); }
+                    HorizontalBox {
+                        padding-left: 12px; padding-right: 12px; spacing: 12px; alignment: start;
+                        Rectangle { width: 20px; IconDisplay { icon: IconSet.CalendarRange; size: 20px; stroke-width: 2.3; stroke: root.active-page == 8 ? Theme.primary-foreground : Theme.muted-foreground; y: (parent.height - self.height) / 2; } }
+                        Text { text: "Terminarz"; font-size: 14px; color: root.active-page == 8 ? Theme.primary-foreground : Theme.muted-foreground; vertical-alignment: center; }
+                    }
+                }
+            }
         }
         
         Rectangle { vertical-stretch: 1; } // Spacer

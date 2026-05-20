@@ -69,8 +69,6 @@ component LessonPopover inherits Rectangle {
         opacity: open ? 1.0 : 0.0;
         animate opacity { duration: 200ms; easing: ease-out; }
 
-        TouchArea {}
-
         VerticalBox {
             padding: 20px;
             spacing: 12px;
@@ -78,12 +76,12 @@ component LessonPopover inherits Rectangle {
 
             Text { text: "Szczegóły lekcji"; font-size: 12px; color: Theme.muted-foreground; }
 
-            Text {
+            TextInput {
                 text: root.cell.subject;
                 font-size: 22px;
-                font-weight: 700;
                 color: Theme.foreground;
                 wrap: word-wrap;
+                read-only: true;
             }
 
             if root.cell.lesson-type == 1 || root.cell.lesson-type == 3 : Rectangle {
@@ -118,9 +116,10 @@ component LessonPopover inherits Rectangle {
                 }
             }
 
-            if root.cell.change-info != "" : Text {
+            if root.cell.change-info != "" : TextInput {
                 text: root.cell.change-info;
                 font-size: 12px; color: Theme.muted-foreground; wrap: word-wrap;
+                read-only: true;
             }
 
             if root.cell.event-content != "" : Rectangle {
@@ -129,7 +128,7 @@ component LessonPopover inherits Rectangle {
                 evt-lay := VerticalBox {
                     padding: 10px; spacing: 4px;
                     Text { text: root.cell.event-category != "" ? root.cell.event-category : "Wydarzenie"; font-weight: 600; font-size: 11px; color: #93c5fd; }
-                    Text { text: root.cell.event-content; color: Theme.foreground; font-size: 13px; wrap: word-wrap; }
+                    TextInput { text: root.cell.event-content; color: Theme.foreground; font-size: 13px; wrap: word-wrap; read-only: true; }
                 }
             }
 

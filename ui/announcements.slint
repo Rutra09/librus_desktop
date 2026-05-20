@@ -21,12 +21,12 @@ component AnnouncementItem inherits Rectangle {
         spacing: 8px;
         
         HorizontalBox {
-            Text {
+            TextInput {
                 text: item.subject;
-                font-weight: 700;
                 font-size: 16px;
                 color: Theme.foreground;
                 wrap: word-wrap;
+                read-only: true;
             }
             Rectangle { horizontal-stretch: 1; }
             Text {
@@ -36,11 +36,12 @@ component AnnouncementItem inherits Rectangle {
             }
         }
         
-        Text {
+        TextInput {
             text: item.content;
             wrap: word-wrap;
             font-size: 14px;
             color: Theme.foreground;
+            read-only: true;
         }
         
         HorizontalBox {

@@ -1,0 +1,200 @@
+import { VerticalBox, HorizontalBox, ScrollView } from "std-widgets.slint";
+import { Theme } from "style.slint";
+
+export struct UIEvent {
+    subject: string,
+    content: string,
+    category: string,
+    date: string,
+    lesson-no: string,
+    teacher: string,
+}
+
+component EventItem inherits Rectangle {
+    in property <UIEvent> item;
+    
+    background: Theme.card;
+    border-radius: Theme.radius;
+    border-width: 1px;
+    border-color: Theme.border;
+    
+    VerticalBox {
+        padding: Theme.padding;
+        spacing: 8px;
+        
+        HorizontalBox {
+            spacing: 8px;
+            TextInput {
+                text: item.subject;
+                font-size: 16px;
+                color: Theme.foreground;
+                wrap: word-wrap;
+                horizontal-stretch: 1;
+                read-only: true;
+            }
+            Rectangle {
+                background: #3b82f6; // blue-500
+                border-radius: 4px;
+                height: 20px;
+                HorizontalBox {
+                    padding-left: 6px; padding-right: 6px; padding-top: 2px; padding-bottom: 2px;
+                    Text {
+                        text: item.category;
+                        font-size: 10px;
+                        font-weight: 700;
+                        color: white;
+                    }
+                }
+            }
+        }
+        
+        TextInput {
+            text: item.content;
+            wrap: word-wrap;
+            font-size: 14px;
+            color: Theme.foreground;
+            read-only: true;
+        }
+        
+        HorizontalBox {
+            Text {
+                text: "Termin: " + item.date + (item.lesson-no != "" ? " (lekcja " + item.lesson-no + ")" : "");
+                font-size: 12px;
+                color: Theme.primary;
+                font-weight: 600;
+            }
+            Rectangle { horizontal-stretch: 1; }
+            if item.teacher != "" : Text {
+                text: "Nauczyciel: " + item.teacher;
+                font-size: 12px;
+                color: Theme.muted-foreground;
+                font-italic: true;
+            }
+        }
+    }
+}
+
+export component EventsView inherits Rectangle {
+    in property <[UIEvent]> upcoming-events;
+    in property <[UIEvent]> today-events;
+    in property <[UIEvent]> past-events;
+    
+    property <int> active-tab: 0; // 0 = Upcoming, 1 = Today, 2 = Past
+
+    background: Theme.background;
+
+    VerticalBox {
+        padding: Theme.padding;
+        spacing: Theme.gap;
+
+        HorizontalBox {
+            alignment: space-between;
+            Text {
+                text: "Terminarz / Wydarzenia";
+                font-size: 24px;
+                font-weight: 700;
+                color: Theme.foreground;
+            }
+        }
+
+        // Tab switcher
+        HorizontalBox {
+            spacing: 8px;
+            alignment: start;
+            
+            // Upcoming Tab
+            Rectangle {
+                background: root.active-tab == 0 ? Theme.primary : Theme.card;
+                border-radius: Theme.radius;
+                border-width: 1px;
+                border-color: root.active-tab == 0 ? Theme.primary : Theme.border;
+                height: 36px;
+                
+                TouchArea {
+                    clicked => { root.active-tab = 0; }
+                    HorizontalBox {
+                        padding-left: 16px; padding-right: 16px;
+                        Text {
+                            text: "Nadchodzące (" + root.upcoming-events.length + ")";
+                            color: root.active-tab == 0 ? Theme.primary-foreground : Theme.foreground;
+                            font-size: 13px;
+                            font-weight: 600;
+                            vertical-alignment: center;
+                        }
+                    }
+                }
+            }
+
+            // Today Tab
+            Rectangle {
+                background: root.active-tab == 1 ? Theme.primary : Theme.card;
+                border-radius: Theme.radius;
+                border-width: 1px;
+                border-color: root.active-tab == 1 ? Theme.primary : Theme.border;
+                height: 36px;
+                
+                TouchArea {
+                    clicked => { root.active-tab = 1; }
+                    HorizontalBox {
+                        padding-left: 16px; padding-right: 16px;
+                        Text {
+                            text: "Dzisiaj (" + root.today-events.length + ")";
+                            color: root.active-tab == 1 ? Theme.primary-foreground : Theme.foreground;
+                            font-size: 13px;
+                            font-weight: 600;
+                            vertical-alignment: center;
+                        }
+                    }
+                }
+            }
+
+            // Past Tab
+            Rectangle {
+                background: root.active-tab == 2 ? Theme.primary : Theme.card;
+                border-radius: Theme.radius;
+                border-width: 1px;
+                border-color: root.active-tab == 2 ? Theme.primary : Theme.border;
+                height: 36px;
+                
+                TouchArea {
+                    clicked => { root.active-tab = 2; }
+                    HorizontalBox {
+                        padding-left: 16px; padding-right: 16px;
+                        Text {
+                            text: "Minione (" + root.past-events.length + ")";
+                            color: root.active-tab == 2 ? Theme.primary-foreground : Theme.foreground;
+                            font-size: 13px;
+                            font-weight: 600;
+                            vertical-alignment: center;
+                        }
+                    }
+                }
+            }
+        }
+
+        ScrollView {
+            VerticalBox {
+                spacing: Theme.gap;
+                alignment: start;
+                
+                if root.active-tab == 0 : VerticalBox {
+                    spacing: Theme.gap;
+                    padding: 0;
+                    for ev in root.upcoming-events : EventItem { item: ev; }
+                }
+                
+                if root.active-tab == 1 : VerticalBox {
+                    spacing: Theme.gap;
+                    padding: 0;
+                    for ev in root.today-events : EventItem { item: ev; }
+                }
+
+                if root.active-tab == 2 : VerticalBox {
+                    spacing: Theme.gap;
+                    padding: 0;
+                    for ev in root.past-events : EventItem { item: ev; }
+                }
+            }
+        }
+    }
+}
