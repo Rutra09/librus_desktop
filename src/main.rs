@@ -293,12 +293,7 @@ async fn update_grades_ui(window_weak: slint::Weak<MainWindow>, state: AppState)
                 }
             }
             
-            let comment_part = if !grade_comment_texts.is_empty() {
-                format!(" - {}", grade_comment_texts.join(", "))
-            } else {
-                "".to_string()
-            };
-            
+
             let comment_text = grade_comment_texts.join(", ");
             let combined_desc = format!("{} ({})", cat_name, teacher_name);
             
