@@ -91,10 +91,10 @@ async fn fetch_metadata(client: LibrusClient, state: AppState) {
     // 3.5 Grade Comments
     match client.fetch_grade_comments().await {
         Ok(comments) => {
-            println!("Successfully fetched {} grade comments!", comments.len());
+            log::info!("Successfully fetched {} grade comments!", comments.len());
             for c in &comments {
                 if let (Some(id), Some(text)) = (c.id, &c.text) {
-                    println!("Comment [ID: {}]: {}", id, text);
+                    log::info!("Comment [ID: {}]: {}", id, text);
                 }
             }
             let mut map = state.grade_comments.lock().await;
@@ -106,7 +106,7 @@ async fn fetch_metadata(client: LibrusClient, state: AppState) {
             }
         }
         Err(e) => {
-            println!("Failed to fetch grade comments: {:?}", e);
+            log::info!("Failed to fetch grade comments: {:?}", e);
         }
     }
     // 4. Attendance Types
@@ -288,7 +288,7 @@ async fn update_grades_ui(window_weak: slint::Weak<MainWindow>, state: AppState)
                     if let Some(comment_text) = comments_map.get(&comment_id) {
                         grade_comment_texts.push(comment_text.clone());
                     } else {
-                        println!("Grade has comment ID {}, but it was not found in comments map!", comment_id);
+                        log::info!("Grade has comment ID {}, but it was not found in comments map!", comment_id);
                     }
                 }
             }
@@ -900,10 +900,10 @@ async fn fetch_attendances_data(client: LibrusClient, window_weak: slint::Weak<M
 
 async fn fetch_messages_data(client: LibrusClient, window_weak: slint::Weak<MainWindow>) {
     
-    println!("Fetching messages...");
+    log::info!("Fetching messages...");
     match client.fetch_messages().await {
         Ok(messages) => {
-            println!("Received {} messages", messages.len());
+            log::info!("Received {} messages", messages.len());
             let mut ui_messages = Vec::new();
             
             for msg in messages {
@@ -914,7 +914,7 @@ async fn fetch_messages_data(client: LibrusClient, window_weak: slint::Weak<Main
                     .unwrap_or(&msg.send_date)
                     .to_string();
                 
-                println!("Message: {} from {}", msg.subject, msg.sender_name);
+                log::info!("Message: {} from {}", msg.subject, msg.sender_name);
                 
                 ui_messages.push(UIMessage {
                     id: msg.id as i32,
@@ -937,7 +937,7 @@ async fn fetch_messages_data(client: LibrusClient, window_weak: slint::Weak<Main
             });
         }
         Err(e) => {
-            eprintln!("Failed to fetch messages: {:?}", e);
+            log::error!("Failed to fetch messages: {:?}", e);
         }
     }
 }
@@ -972,7 +972,7 @@ async fn fetch_homework_data(client: LibrusClient, window_weak: slint::Weak<Main
     // Use Synergia Scraping for Homework
     match client.fetch_homework_via_synergia(Some(&from), Some(&to)).await {
         Ok(homeworks) => {
-            println!("Fetched {} homework entries via Synergia scraping.", homeworks.len());
+            log::info!("Fetched {} homework entries via Synergia scraping.", homeworks.len());
             let subjects_map = state.subjects.lock().await;
             // let cats_map = state.homework_categories.lock().await;
             let teachers_map = state.teachers.lock().await;
@@ -1050,7 +1050,7 @@ async fn fetch_homework_data(client: LibrusClient, window_weak: slint::Weak<Main
             });
         }
         Err(e) => {
-            eprintln!("Failed to fetch homework via Synergia: {:?}", e);
+            log::error!("Failed to fetch homework via Synergia: {:?}", e);
             // Fallback to API if sync fails? 
             // For now just error is enough debug info.
         }
@@ -1154,11 +1154,20 @@ async fn refresh_all_data(client: LibrusClient, window_weak: slint::Weak<MainWin
     // Wait for all
     tokio::join!(t1, t2, t3, t4, t5, t6, t7, t8);
     
-    println!("Refresh complete.");
+    log::info!("Refresh complete.");
 }
 
 #[tokio::main]
 async fn main() -> Result<()> {
+    // Setup file logging
+    if let Ok(log_file) = std::fs::File::create("librus.log") {
+        let _ = simplelog::WriteLogger::init(
+            simplelog::LevelFilter::Info,
+            simplelog::Config::default(),
+            log_file,
+        );
+    }
+
     // Force Skia backend if not already set
     if std::env::var("SLINT_BACKEND").is_err() {
         std::env::set_var("SLINT_BACKEND", "skia");
@@ -1464,7 +1473,7 @@ async fn main() -> Result<()> {
                         });
                     }
                     Err(e) => {
-                        eprintln!("Failed to fetch message details: {:?}", e);
+                        log::error!("Failed to fetch message details: {:?}", e);
                     }
                 }
             }
@@ -1496,7 +1505,7 @@ async fn main() -> Result<()> {
                 // Save session
                 let session = auth_to_session(auth);
                 if let Err(e) = session::save_session(&session) {
-                    eprintln!("Failed to save session with Synergia credentials: {:?}", e);
+                    log::error!("Failed to save session with Synergia credentials: {:?}", e);
                 }
                 
                 drop(state);
@@ -1512,7 +1521,7 @@ async fn main() -> Result<()> {
                 // Fetch messages
                 fetch_messages_data(updated_client, main_window_weak.clone()).await;
                 
-                println!("Synergia credentials saved and messages loaded!");
+                log::info!("Synergia credentials saved and messages loaded!");
             }
         });
     });
@@ -1540,7 +1549,7 @@ async fn main() -> Result<()> {
                 drop(state);
                 
                 let date = week_arc.lock().await.clone();
-                println!("Manual refresh initiated...");
+                log::info!("Manual refresh initiated...");
                 refresh_all_data(client_clone, window, state_copy, date).await;
             }
         });
@@ -1567,7 +1576,7 @@ async fn main() -> Result<()> {
                 }
 
                 let date = week_start_refresh.lock().await.clone();
-                println!("Auto-refresh initiated...");
+                log::info!("Auto-refresh initiated...");
                 refresh_all_data(client_clone, main_window_weak.clone(), state_copy, date).await;
             } else {
                  drop(state);
