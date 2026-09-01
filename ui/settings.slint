@@ -1,0 +1,316 @@
+import { Button, LineEdit, ScrollView, VerticalBox, HorizontalBox, CheckBox } from "std-widgets.slint";
+import { Theme } from "style.slint";
+import { IconDisplay, IconSet } from "@lucide";
+
+export component SettingsView inherits Rectangle {
+    background: Theme.background;
+
+    in-out property <bool> jd-enabled: true;
+    in-out property <string> jd-city: "WARSZAWA";
+    
+    in-out property <string> jd-start-name: "Plac Defilad 1";
+    in-out property <string> jd-start-type: "ADDRESS";
+    in-out property <string> jd-start-lat: "52.2319";
+    in-out property <string> jd-start-lon: "21.0067";
+    in-out property <string> jd-start-code: "";
+
+    in-out property <string> jd-dest-name: "Międzynarodowa";
+    in-out property <string> jd-dest-type: "STOP_POINT";
+    in-out property <string> jd-dest-lat: "52.2299";
+    in-out property <string> jd-dest-lon: "21.0687";
+    in-out property <string> jd-dest-code: "209802";
+
+    in-out property <string> jd-buffer: "5";
+    in-out property <string> jd-avoid-lines: "";
+    in-out property <bool> jd-avoid-changes: false;
+    in-out property <bool> jd-prefer-metro: false;
+    in-out property <string> jd-preferred-lines: "";
+    in-out property <string> save-status: "";
+    in-out property <bool> show-advanced: false;
+
+
+
+    callback save-settings();
+
+    ScrollView {
+        VerticalBox {
+            padding: 24px;
+            spacing: 20px;
+
+            // Page Header
+            HorizontalBox {
+                spacing: 12px;
+                alignment: start;
+                Rectangle {
+                    width: 32px;
+                    IconDisplay {
+                        icon: IconSet.Settings;
+                        size: 28px;
+                        stroke-width: 2.2;
+                        stroke: #3b82f6;
+                        y: (parent.height - self.height) / 2;
+                    }
+                }
+                VerticalBox {
+                    spacing: 2px;
+                    Text {
+                        text: "Ustawienia Aplikacji";
+                        font-size: 24px;
+                        font-weight: 700;
+                        color: Theme.foreground;
+                    }
+                    Text {
+                        text: "Konfiguracja widżetów i preferencji dojazdu do szkoły";
+                        font-size: 13px;
+                        color: Theme.muted-foreground;
+                    }
+                }
+            }
+
+            // Jakdojade Integration Card (User Friendly)
+            Rectangle {
+                background: Theme.card;
+                border-radius: Theme.radius;
+                border-width: 1px;
+                border-color: Theme.border;
+
+                VerticalBox {
+                    padding: 24px;
+                    spacing: 20px;
+
+                    // Section Title
+                    HorizontalBox {
+                        spacing: 12px;
+                        alignment: start;
+                        Rectangle {
+                            width: 28px;
+                            IconDisplay {
+                                icon: IconSet.Bus;
+                                size: 24px;
+                                stroke-width: 2.0;
+                                stroke: #3b82f6;
+                                y: (parent.height - self.height) / 2;
+                            }
+                        }
+                        VerticalBox {
+                            spacing: 2px;
+                            Text {
+                                text: "Dojazd do Szkoły (Jakdojade)";
+                                font-size: 18px;
+                                font-weight: 700;
+                                color: Theme.foreground;
+                            }
+                            Text {
+                                text: "Automatycznie wylicza optymalny czas wyjścia z domu na pierwszą lekcję";
+                                font-size: 12px;
+                                color: Theme.muted-foreground;
+                            }
+                        }
+                    }
+
+                    Rectangle { height: 1px; background: Theme.border; }
+
+                    CheckBox {
+                        text: "Włącz widżet trasy na panelu bocznym";
+                        checked: root.jd-enabled;
+                        toggled => { root.jd-enabled = self.checked; }
+                    }
+
+                    // City & Buffer Row
+                    HorizontalBox {
+                        spacing: 16px;
+                        VerticalBox {
+                            horizontal-stretch: 2;
+                            spacing: 6px;
+                            Text { text: "Miasto (np. Warszawa, Kraków, Poznań):"; font-size: 13px; font-weight: 600; color: Theme.foreground; }
+                            LineEdit {
+                                text: root.jd-city;
+                                placeholder-text: "np. Warszawa";
+                                edited(val) => { root.jd-city = val; }
+                            }
+                        }
+                        VerticalBox {
+                            horizontal-stretch: 1;
+                            spacing: 6px;
+                            Text { text: "Zapas czasu przed lekcją (w minutach):"; font-size: 13px; font-weight: 600; color: Theme.foreground; }
+                            LineEdit {
+                                text: root.jd-buffer;
+                                placeholder-text: "5";
+                                edited(val) => { root.jd-buffer = val; }
+                            }
+                        }
+                    }
+
+                    // Start Location Input
+                    VerticalBox {
+                        spacing: 6px;
+                        Text { text: "🏠 Skąd wyjeżdżasz (Adres domowy lub Przystanek początkowy):"; font-size: 13px; font-weight: 600; color: Theme.foreground; }
+                        LineEdit {
+                            text: root.jd-start-name;
+                            placeholder-text: "np. ul. Marszałkowska 10 lub Przystanek Centrum";
+                            edited(val) => { root.jd-start-name = val; }
+                        }
+                        Text { text: "Podaj ulicę z numerem domu lub nazwę przystanku startowego"; font-size: 11px; color: Theme.muted-foreground; }
+                    }
+
+                    // Destination Location Input
+                    VerticalBox {
+                        spacing: 6px;
+                        Text { text: "🏫 Dokąd jedziesz (Adres szkoły lub Przystanek docelowy):"; font-size: 13px; font-weight: 600; color: Theme.foreground; }
+                        LineEdit {
+                            text: root.jd-dest-name;
+                            placeholder-text: "np. ul. Nowowiejska 37 lub Przystanek Międzynarodowa";
+                            edited(val) => { root.jd-dest-name = val; }
+                        }
+                        Text { text: "Podaj adres szkoły lub nazwę najbliższego przystanku docelowego"; font-size: 11px; color: Theme.muted-foreground; }
+                    }
+
+                    // Preferred Lines & Metro Section
+                    VerticalBox {
+                        spacing: 6px;
+                        Text { text: "⭐ Preferowane linie i środki transportu:"; font-size: 13px; font-weight: 600; color: Theme.foreground; }
+                        
+                        CheckBox {
+                            text: "Preferuj Metro (M1 / M2)";
+                            checked: root.jd-prefer-metro;
+                            toggled => { root.jd-prefer-metro = self.checked; }
+                        }
+
+                        LineEdit {
+                            text: root.jd-preferred-lines;
+                            placeholder-text: "np. M1, M2, 509, 17";
+                            edited(val) => { root.jd-preferred-lines = val; }
+                        }
+                        Text { text: "Wpisz numery linii, które mają mieć priorytet podczas wyszukiwania trasy"; font-size: 11px; color: Theme.muted-foreground; }
+                    }
+
+                    // Avoid Lines & Route Preferences Section
+                    VerticalBox {
+                        spacing: 6px;
+                        Text { text: "🚫 Linie do unikania (opcjonalnie):"; font-size: 13px; font-weight: 600; color: Theme.foreground; }
+                        LineEdit {
+                            text: root.jd-avoid-lines;
+                            placeholder-text: "np. 516, L-1, N42";
+                            edited(val) => { root.jd-avoid-lines = val; }
+                        }
+                        Text { text: "Wpisz numery linii oddzielone przecinkami, których trasa ma unikać"; font-size: 11px; color: Theme.muted-foreground; }
+                    }
+
+                    CheckBox {
+                        text: "Preferuj trasy bezpośrednie (bez przesiadek)";
+                        checked: root.jd-avoid-changes;
+                        toggled => { root.jd-avoid-changes = self.checked; }
+                    }
+
+                    Rectangle { height: 1px; background: Theme.border; }
+
+
+
+                    // Save Button & Status Row
+                    HorizontalBox {
+                        alignment: space-between;
+                        Text {
+                            text: root.save-status;
+                            font-size: 13px;
+                            font-weight: 600;
+                            color: #22c55e;
+                            vertical-alignment: center;
+                        }
+                        HorizontalBox {
+                            spacing: 12px;
+                            Button {
+                                text: root.show-advanced ? "Ukryj opcje zaawansowane" : "Opcje zaawansowane GPS";
+                                clicked => { root.show-advanced = !root.show-advanced; }
+                            }
+                            Button {
+                                text: "Zapisz i Pobierz Trasę";
+                                primary: true;
+                                clicked => { root.save-settings(); }
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Advanced Technical Settings Card (Optional / Collapsible)
+            if root.show-advanced : Rectangle {
+                background: Theme.card;
+                border-radius: Theme.radius;
+                border-width: 1px;
+                border-color: Theme.border;
+
+                VerticalBox {
+                    padding: 20px;
+                    spacing: 16px;
+
+                    Text {
+                        text: "Zaawansowana konfiguracja współrzędnych i kodów Jakdojade";
+                        font-size: 14px;
+                        font-weight: 600;
+                        color: #eab308;
+                    }
+                    Text {
+                        text: "Współrzędne geograficzne i kody przystanków są uzupełniane automatycznie na podstawie adresów podanych wyżej. Możesz je tutaj ręcznie skorygować.";
+                        font-size: 12px;
+                        color: Theme.muted-foreground;
+                    }
+
+                    Rectangle { height: 1px; background: Theme.border; }
+
+                    // Advanced Start Location
+                    Text { text: "Punkt Początkowy (Szczegóły):"; font-size: 13px; font-weight: 600; color: Theme.foreground; }
+                    HorizontalBox {
+                        spacing: 12px;
+                        VerticalBox {
+                            spacing: 4px;
+                            Text { text: "Typ punktu (ADDRESS / STOP_POINT):"; font-size: 11px; color: Theme.muted-foreground; }
+                            LineEdit { text: root.jd-start-type; edited(v) => { root.jd-start-type = v; } }
+                        }
+                        VerticalBox {
+                            spacing: 4px;
+                            Text { text: "Szerokość geogr. (Lat):"; font-size: 11px; color: Theme.muted-foreground; }
+                            LineEdit { text: root.jd-start-lat; edited(v) => { root.jd-start-lat = v; } }
+                        }
+                        VerticalBox {
+                            spacing: 4px;
+                            Text { text: "Długość geogr. (Lon):"; font-size: 11px; color: Theme.muted-foreground; }
+                            LineEdit { text: root.jd-start-lon; edited(v) => { root.jd-start-lon = v; } }
+                        }
+                        VerticalBox {
+                            spacing: 4px;
+                            Text { text: "Kod przystanku:"; font-size: 11px; color: Theme.muted-foreground; }
+                            LineEdit { text: root.jd-start-code; edited(v) => { root.jd-start-code = v; } }
+                        }
+                    }
+
+                    // Advanced Destination Location
+                    Text { text: "Punkt Docelowy (Szczegóły):"; font-size: 13px; font-weight: 600; color: Theme.foreground; }
+                    HorizontalBox {
+                        spacing: 12px;
+                        VerticalBox {
+                            spacing: 4px;
+                            Text { text: "Typ punktu (ADDRESS / STOP_POINT):"; font-size: 11px; color: Theme.muted-foreground; }
+                            LineEdit { text: root.jd-dest-type; edited(v) => { root.jd-dest-type = v; } }
+                        }
+                        VerticalBox {
+                            spacing: 4px;
+                            Text { text: "Szerokość geogr. (Lat):"; font-size: 11px; color: Theme.muted-foreground; }
+                            LineEdit { text: root.jd-dest-lat; edited(v) => { root.jd-dest-lat = v; } }
+                        }
+                        VerticalBox {
+                            spacing: 4px;
+                            Text { text: "Długość geogr. (Lon):"; font-size: 11px; color: Theme.muted-foreground; }
+                            LineEdit { text: root.jd-dest-lon; edited(v) => { root.jd-dest-lon = v; } }
+                        }
+                        VerticalBox {
+                            spacing: 4px;
+                            Text { text: "Kod przystanku:"; font-size: 11px; color: Theme.muted-foreground; }
+                            LineEdit { text: root.jd-dest-code; edited(v) => { root.jd-dest-code = v; } }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+

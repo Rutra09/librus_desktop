@@ -1137,6 +1137,239 @@ async fn fetch_events_data(client: LibrusClient, window_weak: slint::Weak<MainWi
     }
 }
 
+async fn fetch_jakdojade_commute(
+    client: LibrusClient,
+    window_weak: slint::Weak<MainWindow>,
+    state: AppState,
+) {
+    use chrono::Datelike;
+
+    let config = match librus_front::api::jakdojade::load_config() {
+        Ok(c) => c,
+        Err(e) => {
+            log::error!("Failed to load Jakdojade config: {:?}", e);
+            return;
+        }
+    };
+
+    let config_clone = config.clone();
+
+    // Update UI fields for settings view
+    let _ = slint::invoke_from_event_loop({
+        let window_weak = window_weak.clone();
+        let cfg = config_clone.clone();
+        move || {
+            if let Some(window) = window_weak.upgrade() {
+                window.set_jd_enabled(cfg.enabled);
+                window.set_jd_city(cfg.start_location.city_symbol.clone().into());
+                window.set_jd_start_name(cfg.start_location.location_name.clone().into());
+                window.set_jd_start_type(cfg.start_location.location_type.clone().into());
+                window.set_jd_start_lat(cfg.start_location.y_lat.to_string().into());
+                window.set_jd_start_lon(cfg.start_location.x_lon.to_string().into());
+                window.set_jd_start_code(cfg.start_location.location_code.clone().into());
+
+                window.set_jd_dest_name(cfg.dest_location.location_name.clone().into());
+                window.set_jd_dest_type(cfg.dest_location.location_type.clone().into());
+                window.set_jd_dest_lat(cfg.dest_location.y_lat.to_string().into());
+                window.set_jd_dest_lon(cfg.dest_location.x_lon.to_string().into());
+                window.set_jd_dest_code(cfg.dest_location.location_code.clone().into());
+
+                window.set_jd_buffer(cfg.buffer_minutes.to_string().into());
+            }
+        }
+    });
+
+    if !config.enabled {
+        let _ = slint::invoke_from_event_loop(move || {
+            if let Some(window) = window_weak.upgrade() {
+                window.set_jd_leave_time("".into());
+                window.set_jd_status("Integracja wyłączona".into());
+            }
+        });
+        return;
+    }
+
+    let window_weak_loading = window_weak.clone();
+    let _ = slint::invoke_from_event_loop(move || {
+        if let Some(window) = window_weak_loading.upgrade() {
+            window.set_jd_status("Szukanie trasy...".into());
+        }
+    });
+
+    let now = chrono::Local::now();
+    let today = now.date_naive();
+    let monday = get_current_monday();
+    let monday_str = monday.format("%Y-%m-%d").to_string();
+
+    let subjects_map = state.subjects.lock().await;
+    let resolve_subject = |id_ref: &Option<librus_front::api::models::IdRef>| -> String {
+        id_ref.as_ref().and_then(|s| s.id).and_then(|id| subjects_map.get(&id)).cloned().unwrap_or_else(|| "Lekcja".to_string())
+    };
+
+    let mut all_lessons: Vec<(chrono::NaiveDate, String, String)> = Vec::new();
+
+    if let Ok(json) = client.fetch_timetable(&monday_str).await {
+        let parsed_days = LibrusClient::parse_timetable(&json);
+        for (date_str, lessons) in parsed_days {
+            if let Ok(date) = chrono::NaiveDate::parse_from_str(&date_str, "%Y-%m-%d") {
+                for l in lessons {
+                    if l.is_canceled.unwrap_or(false) {
+                        continue;
+                    }
+                    if let Some(h_from) = &l.hour_from {
+                        if !h_from.is_empty() {
+                            let subj = resolve_subject(&l.subject);
+                            all_lessons.push((date, h_from.clone(), subj));
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // Check if next week is needed
+    if all_lessons.iter().all(|(d, t, _)| {
+        if *d < today {
+            return true;
+        }
+        if *d == today {
+            if let Ok(t_parsed) = chrono::NaiveTime::parse_from_str(t, "%H:%M") {
+                return now.time() >= t_parsed;
+            }
+        }
+        false
+    }) {
+        let next_monday = monday + chrono::Duration::days(7);
+        let next_monday_str = next_monday.format("%Y-%m-%d").to_string();
+        if let Ok(json) = client.fetch_timetable(&next_monday_str).await {
+            let parsed_days = LibrusClient::parse_timetable(&json);
+            for (date_str, lessons) in parsed_days {
+                if let Ok(date) = chrono::NaiveDate::parse_from_str(&date_str, "%Y-%m-%d") {
+                    for l in lessons {
+                        if l.is_canceled.unwrap_or(false) {
+                            continue;
+                        }
+                        if let Some(h_from) = &l.hour_from {
+                            if !h_from.is_empty() {
+                                let subj = resolve_subject(&l.subject);
+                                all_lessons.push((date, h_from.clone(), subj));
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+
+
+    // Determine nearest first lesson
+    let today_lessons: Vec<_> = all_lessons.iter().filter(|(d, _, _)| *d == today).collect();
+    let mut target_info: Option<(chrono::NaiveDate, String, String, String)> = None;
+
+    if !today_lessons.is_empty() {
+        let mut today_sorted = today_lessons;
+        today_sorted.sort_by(|a, b| a.1.cmp(&b.1));
+        let earliest_today = today_sorted[0];
+
+        if let Ok(t_parsed) = chrono::NaiveTime::parse_from_str(&earliest_today.1, "%H:%M") {
+            let today_lesson_dt = chrono::NaiveDateTime::new(today, t_parsed);
+            if now.naive_local() < today_lesson_dt {
+                target_info = Some((today, earliest_today.1.clone(), earliest_today.2.clone(), "Dziś".to_string()));
+            }
+        }
+    }
+
+    if target_info.is_none() {
+        let mut future_lessons: Vec<_> = all_lessons.iter().filter(|(d, _, _)| *d > today).collect();
+        future_lessons.sort_by(|a, b| a.0.cmp(&b.0).then_with(|| a.1.cmp(&b.1)));
+
+        if let Some(next_lesson) = future_lessons.first() {
+            let day_label = if next_lesson.0 == today + chrono::Duration::days(1) {
+                "Jutro".to_string()
+            } else {
+                match next_lesson.0.weekday() {
+                    chrono::Weekday::Mon => "Poniedziałek".to_string(),
+                    chrono::Weekday::Tue => "Wtorek".to_string(),
+                    chrono::Weekday::Wed => "Środa".to_string(),
+                    chrono::Weekday::Thu => "Czwartek".to_string(),
+                    chrono::Weekday::Fri => "Piątek".to_string(),
+                    _ => next_lesson.0.format("%d.%m").to_string(),
+                }
+            };
+            target_info = Some((next_lesson.0, next_lesson.1.clone(), next_lesson.2.clone(), day_label));
+        }
+    }
+
+    let (target_date, lesson_time_str, subject_name, day_label) = match target_info {
+        Some(t) => t,
+        None => {
+            let _ = slint::invoke_from_event_loop(move || {
+                if let Some(window) = window_weak.upgrade() {
+                    window.set_jd_leave_time("".into());
+                    window.set_jd_status("Brak nadchodzących lekcji".into());
+                }
+            });
+            return;
+        }
+    };
+
+    let lesson_time = match chrono::NaiveTime::parse_from_str(&lesson_time_str, "%H:%M") {
+        Ok(t) => t,
+        Err(_) => {
+            let _ = slint::invoke_from_event_loop(move || {
+                if let Some(window) = window_weak.upgrade() {
+                    window.set_jd_status("Błąd godziny lekcji".into());
+                }
+            });
+            return;
+        }
+    };
+
+    use chrono::TimeZone;
+    let lesson_dt = chrono::NaiveDateTime::new(target_date, lesson_time);
+    let arrival_dt = lesson_dt - chrono::Duration::minutes(config.buffer_minutes as i64);
+    let local_arrival_dt = match chrono::Local.from_local_datetime(&arrival_dt) {
+        chrono::LocalResult::Single(dt) => dt,
+        chrono::LocalResult::Ambiguous(dt, _) => dt,
+        chrono::LocalResult::None => chrono::Local::now(),
+    };
+    let utc_arrival_dt: chrono::DateTime<chrono::Utc> = local_arrival_dt.into();
+    let arrival_iso = utc_arrival_dt.format("%Y-%m-%dT%H:%M:%S.000Z").to_string();
+
+
+    let mut jd_client = librus_front::api::jakdojade::JakdojadeClient::new(config.clone());
+    match jd_client.find_route(&arrival_iso).await {
+        Ok(route) => {
+            let window_weak_ok = window_weak.clone();
+            let arr_info = format!("Dojazd na {} ({})", lesson_time_str, subject_name);
+            let summary = format!("{} ({} min)", route.summary_text, route.total_minutes);
+
+            let _ = slint::invoke_from_event_loop(move || {
+                if let Some(window) = window_weak_ok.upgrade() {
+                    window.set_jd_leave_time(route.departure_time.into());
+                    window.set_jd_arrival_info(arr_info.into());
+                    window.set_jd_lesson_day(day_label.into());
+                    window.set_jd_route_lines(route.lines_text.into());
+                    window.set_jd_route_summary(summary.into());
+                    window.set_jd_status("".into());
+                }
+            });
+
+        }
+        Err(e) => {
+            log::error!("Failed to fetch Jakdojade route: {:?}", e);
+            let err_msg = format!("Błąd trasy: {}", e);
+            let _ = slint::invoke_from_event_loop(move || {
+                if let Some(window) = window_weak.upgrade() {
+                    window.set_jd_leave_time("".into());
+                    window.set_jd_status(err_msg.into());
+                }
+            });
+        }
+    }
+}
+
 async fn refresh_all_data(client: LibrusClient, window_weak: slint::Weak<MainWindow>, state: AppState, week_start: String) {
     // 1. Metadata (fast, sync-ish)
     fetch_metadata(client.clone(), state.clone()).await;
@@ -1150,12 +1383,15 @@ async fn refresh_all_data(client: LibrusClient, window_weak: slint::Weak<MainWin
     let t6 = fetch_messages_data(client.clone(), window_weak.clone());
     let t7 = fetch_homework_data(client.clone(), window_weak.clone(), state.clone());
     let t8 = fetch_events_data(client.clone(), window_weak.clone(), state.clone());
+    let t9 = fetch_jakdojade_commute(client.clone(), window_weak.clone(), state.clone());
+
     
     // Wait for all
-    tokio::join!(t1, t2, t3, t4, t5, t6, t7, t8);
+    tokio::join!(t1, t2, t3, t4, t5, t6, t7, t8, t9);
     
     log::info!("Refresh complete.");
 }
+
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -1176,6 +1412,30 @@ async fn main() -> Result<()> {
     // Initialize UI
     let main_window = MainWindow::new()?;
     let app_state = Arc::new(Mutex::new(AppState::new()));
+
+    if let Ok(jd_cfg) = librus_front::api::jakdojade::load_config() {
+        main_window.set_jd_enabled(jd_cfg.enabled);
+        main_window.set_jd_city(jd_cfg.start_location.city_symbol.into());
+        main_window.set_jd_start_name(jd_cfg.start_location.location_name.into());
+        main_window.set_jd_start_type(jd_cfg.start_location.location_type.into());
+        main_window.set_jd_start_lat(jd_cfg.start_location.y_lat.to_string().into());
+        main_window.set_jd_start_lon(jd_cfg.start_location.x_lon.to_string().into());
+        main_window.set_jd_start_code(jd_cfg.start_location.location_code.into());
+
+        main_window.set_jd_dest_name(jd_cfg.dest_location.location_name.into());
+        main_window.set_jd_dest_type(jd_cfg.dest_location.location_type.into());
+        main_window.set_jd_dest_lat(jd_cfg.dest_location.y_lat.to_string().into());
+        main_window.set_jd_dest_lon(jd_cfg.dest_location.x_lon.to_string().into());
+        main_window.set_jd_dest_code(jd_cfg.dest_location.location_code.into());
+
+        main_window.set_jd_buffer(jd_cfg.buffer_minutes.to_string().into());
+        main_window.set_jd_avoid_lines(jd_cfg.avoid_lines.into());
+        main_window.set_jd_avoid_changes(jd_cfg.avoid_changes);
+        main_window.set_jd_prefer_metro(jd_cfg.prefer_metro);
+        main_window.set_jd_preferred_lines(jd_cfg.preferred_lines.into());
+
+    }
+
     
     // State for timetable
     let current_week_start: Arc<Mutex<String>> = Arc::new(Mutex::new(get_current_monday().format("%Y-%m-%d").to_string()));
@@ -1629,6 +1889,114 @@ async fn main() -> Result<()> {
         });
     });
 
+    let main_window_weak = main_window.as_weak();
+    let app_state_clone = app_state.clone();
+    main_window.on_save_jakdojade_settings(move |enabled, city, s_name, s_type, s_lat, s_lon, s_code, d_name, d_type, d_lat, d_lon, d_code, buffer, avoid_lines, avoid_changes, prefer_metro, preferred_lines| {
+
+        let main_window_weak = main_window_weak.clone();
+        let app_state_clone = app_state_clone.clone();
+
+        let s_lat_f = s_lat.parse::<f64>().unwrap_or(52.2319);
+        let s_lon_f = s_lon.parse::<f64>().unwrap_or(21.0067);
+        let d_lat_f = d_lat.parse::<f64>().unwrap_or(52.2299);
+        let d_lon_f = d_lon.parse::<f64>().unwrap_or(21.0687);
+        let buffer_i = buffer.parse::<i32>().unwrap_or(5);
+
+        let city_s = city.to_string();
+        let s_name_s = s_name.to_string();
+        let s_type_s = s_type.to_string();
+        let s_code_s = s_code.to_string();
+        let d_name_s = d_name.to_string();
+        let d_type_s = d_type.to_string();
+        let d_code_s = d_code.to_string();
+        let avoid_lines_s = avoid_lines.to_string();
+        let preferred_lines_s = preferred_lines.to_string();
+
+        let mw_status = main_window_weak.clone();
+        let _ = slint::invoke_from_event_loop(move || {
+            if let Some(window) = mw_status.upgrade() {
+                window.set_jd_save_status("Wyszukiwanie lokalizacji...".into());
+            }
+        });
+
+        tokio::spawn(async move {
+            let mut final_s_lat = s_lat_f;
+            let mut final_s_lon = s_lon_f;
+            let mut final_d_lat = d_lat_f;
+            let mut final_d_lon = d_lon_f;
+
+            if let Some((lat, lon)) = librus_front::api::jakdojade::geocode_address(&city_s, &s_name_s).await {
+                final_s_lat = lat;
+                final_s_lon = lon;
+            }
+
+            if let Some((lat, lon)) = librus_front::api::jakdojade::geocode_address(&city_s, &d_name_s).await {
+                final_d_lat = lat;
+                final_d_lon = lon;
+            }
+
+            let s_lat_str = final_s_lat.to_string();
+            let s_lon_str = final_s_lon.to_string();
+            let d_lat_str = final_d_lat.to_string();
+            let d_lon_str = final_d_lon.to_string();
+            let mw_ui = main_window_weak.clone();
+            let _ = slint::invoke_from_event_loop(move || {
+                if let Some(window) = mw_ui.upgrade() {
+                    window.set_jd_start_lat(s_lat_str.into());
+                    window.set_jd_start_lon(s_lon_str.into());
+                    window.set_jd_dest_lat(d_lat_str.into());
+                    window.set_jd_dest_lon(d_lon_str.into());
+                    window.set_jd_save_status("Zapisano i wyliczono trasę!".into());
+                }
+            });
+
+            let existing_cfg = librus_front::api::jakdojade::load_config().unwrap_or_default();
+            let new_config = librus_front::api::jakdojade::JakdojadeConfig {
+                enabled,
+                profile_login: existing_cfg.profile_login,
+                password_hash: existing_cfg.password_hash,
+                device_id: existing_cfg.device_id,
+                start_location: librus_front::api::jakdojade::LocationConfig {
+                    city_symbol: city_s.clone(),
+                    location_name: s_name_s.clone(),
+                    location_type: s_type_s.clone(),
+                    location_code: s_code_s.clone(),
+                    y_lat: final_s_lat,
+                    x_lon: final_s_lon,
+                },
+                dest_location: librus_front::api::jakdojade::LocationConfig {
+                    city_symbol: city_s.clone(),
+                    location_name: d_name_s.clone(),
+                    location_type: d_type_s.clone(),
+                    location_code: d_code_s.clone(),
+                    y_lat: final_d_lat,
+                    x_lon: final_d_lon,
+                },
+                buffer_minutes: buffer_i,
+                avoid_lines: avoid_lines_s,
+                avoid_changes,
+                prefer_metro,
+                preferred_lines: preferred_lines_s,
+            };
+
+            if let Err(e) = librus_front::api::jakdojade::save_config(&new_config) {
+                log::error!("Failed to save Jakdojade config: {:?}", e);
+            }
+
+
+
+            let state = app_state_clone.lock().await;
+            if let Some(client) = &state.client {
+                let client_clone = client.clone();
+                let state_copy = state.clone();
+                drop(state);
+                fetch_jakdojade_commute(client_clone, main_window_weak, state_copy).await;
+            }
+        });
+    });
+
+
     main_window.run()?;
     Ok(())
 }
+

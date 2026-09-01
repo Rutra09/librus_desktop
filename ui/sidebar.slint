@@ -9,6 +9,16 @@ export component Sidebar inherits Rectangle {
     in property <string> user-name;
     in property <string> lucky-number;
     
+    // Jakdojade properties
+    in property <bool> jd-enabled: true;
+    in property <string> jd-leave-time: "";
+    in property <string> jd-arrival-info: "";
+    in property <string> jd-lesson-day: "";
+    in property <string> jd-route-lines: "";
+    in property <string> jd-route-summary: "";
+    in property <string> jd-status: "";
+
+
     callback navigate(int);
     callback logout();
     callback refresh();
@@ -132,16 +142,155 @@ export component Sidebar inherits Rectangle {
                     }
                 }
             }
+            Rectangle {
+                height: 40px; background: root.active-page == 9 ? Theme.primary : transparent; border-radius: Theme.radius;
+                TouchArea {
+                    clicked => { root.navigate(9); }
+                    HorizontalBox {
+                        padding-left: 12px; padding-right: 12px; spacing: 12px; alignment: start;
+                        Rectangle { width: 20px; IconDisplay { icon: IconSet.Settings; size: 20px; stroke-width: 2.3; stroke: root.active-page == 9 ? Theme.primary-foreground : Theme.muted-foreground; y: (parent.height - self.height) / 2; } }
+
+                        Text { text: "Ustawienia"; font-size: 14px; color: root.active-page == 9 ? Theme.primary-foreground : Theme.muted-foreground; vertical-alignment: center; }
+                    }
+                }
+            }
         }
         
         Rectangle { vertical-stretch: 1; } // Spacer
         
-        // Footer (Lucky Number & Logout)
+        // Footer (Jakdojade Widget, Lucky Number & Logout)
         Rectangle { height: 1px; background: #27272a; }
 
         VerticalBox {
             spacing: 8px;
             
+            // Jakdojade Commute Widget (Nad Szczęśliwym Numerkiem)
+            if root.jd-enabled : Rectangle {
+                background: #27272a; // zinc-800
+                border-radius: Theme.radius;
+
+                
+                VerticalBox {
+                    padding: 10px;
+                    spacing: 6px;
+                    
+                    // Header Row
+                    HorizontalBox {
+                        alignment: space-between;
+                        spacing: 4px;
+                        HorizontalBox {
+                            spacing: 6px;
+                            Rectangle {
+                                width: 14px;
+                                IconDisplay {
+                                    icon: IconSet.Bus;
+                                    size: 14px;
+                                    stroke-width: 2.2;
+                                    stroke: #3b82f6;
+                                    y: (parent.height - self.height) / 2;
+                                }
+                            }
+                            Text {
+                                text: "Dojazd do szkoły";
+                                font-size: 11px;
+                                font-weight: 700;
+                                color: #f4f4f5;
+                                vertical-alignment: center;
+                            }
+                        }
+                        if root.jd-lesson-day != "" : VerticalBox {
+                            alignment: center;
+                            padding: 0px;
+                            Rectangle {
+                                background: #1e3a8a;
+                                border-radius: 4px;
+                                HorizontalBox {
+                                    padding-left: 6px;
+                                    padding-right: 6px;
+                                    padding-top: 2px;
+                                    padding-bottom: 2px;
+                                    Text {
+                                        text: root.jd-lesson-day;
+                                        font-size: 10px;
+                                        font-weight: 700;
+                                        color: #60a5fa;
+                                    }
+                                }
+                            }
+                        }
+
+
+                    }
+                    
+                    Rectangle { height: 1px; background: #3f3f46; }
+                    
+                    if root.jd-leave-time != "" : VerticalBox {
+                        spacing: 4px;
+                        padding: 0px;
+                        
+                        // Departure Time Row
+                        HorizontalBox {
+                            spacing: 6px;
+                            alignment: start;
+                            Text {
+                                text: "Wyjdź o:";
+                                font-size: 11px;
+                                color: #a1a1aa;
+                                vertical-alignment: center;
+                            }
+                            Text {
+                                text: root.jd-leave-time;
+                                font-size: 20px;
+                                font-weight: 800;
+                                color: #22c55e;
+                                vertical-alignment: center;
+                            }
+                        }
+                        
+                        // Arrival and Subject info
+                        Text {
+                            text: root.jd-arrival-info;
+                            font-size: 11px;
+                            font-weight: 600;
+                            color: #e4e4e7;
+                            wrap: word-wrap;
+                        }
+
+                        // Vehicle Lines
+                        if root.jd-route-lines != "" : HorizontalBox {
+                            spacing: 4px;
+                            alignment: start;
+                            Text {
+                                text: "Linie:";
+                                font-size: 10px;
+                                color: #a1a1aa;
+                            }
+                            Text {
+                                text: root.jd-route-lines;
+                                font-size: 11px;
+                                font-weight: 700;
+                                color: #60a5fa;
+                            }
+                        }
+                        
+                        // Full Route Details (Wrapping, readable)
+                        Text {
+                            text: root.jd-route-summary;
+                            font-size: 10px;
+                            color: #a1a1aa;
+                            wrap: word-wrap;
+                        }
+                    }
+                    
+                    if root.jd-leave-time == "" : Text {
+                        text: root.jd-status != "" ? root.jd-status : "Ładowanie połączenia...";
+                        font-size: 10px;
+                        color: #a1a1aa;
+                        wrap: word-wrap;
+                    }
+                }
+            }
+
             // Lucky Number Card
             Rectangle {
                 background: #27272a; // zinc-800/50
@@ -174,3 +323,4 @@ export component Sidebar inherits Rectangle {
         }
     }
 }
+

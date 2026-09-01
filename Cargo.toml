@@ -23,6 +23,11 @@ lucide-slint = "0.577.0"
 self_update = { version = "0.43.1", features = ["archive-zip", "compression-zip-bzip2", "compression-zip-deflate", "rustls"] }
 log = "0.4.32"
 simplelog = "0.12.2"
+sha2 = "0.10"
+hmac = "0.12"
+uuid = { version = "1", features = ["v4"] }
+
+
 
 [build-dependencies]
 image = "0.25.9"

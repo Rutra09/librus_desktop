@@ -11,6 +11,7 @@ import { AttendanceView, UIAttendance, UIAttendanceSubject } from "attendance.sl
 import { MessagesView, UIMessage } from "messages.slint";
 import { HomeworkView, UIHomework } from "homework.slint";
 import { EventsView, UIEvent } from "events.slint";
+import { SettingsView } from "settings.slint";
 
 export component MainWindow inherits Window {
     title: "Librus Desktop";
@@ -20,7 +21,7 @@ export component MainWindow inherits Window {
     
     background: Theme.background;
 
-    in-out property <int> active-page: 0; // 0: Login, 1: Dashboard, 2: Timetable, 3: Grades, 4: Announcements, 5: Attendance, 6: Messages, 7: Homework
+    in-out property <int> active-page: 0; // 0: Login, 1: Dashboard, 2: Timetable, 3: Grades, 4: Announcements, 5: Attendance, 6: Messages, 7: Homework, 8: Events, 9: Settings
     in-out property <string> login-error;
     in-out property <bool> is-logging-in: false;
     in-out property <bool> has-synergia-credentials: false;
@@ -30,6 +31,36 @@ export component MainWindow inherits Window {
     in-out property <string> lucky-number: "";
     in-out property <string> lucky-number-for: "";
     in-out property <string> lucky-number-day: "";
+
+    // Jakdojade properties
+    in-out property <bool> jd-enabled: true;
+    in-out property <string> jd-leave-time: "";
+    in-out property <string> jd-arrival-info: "";
+    in-out property <string> jd-lesson-day: "";
+    in-out property <string> jd-route-lines: "";
+    in-out property <string> jd-route-summary: "";
+    in-out property <string> jd-status: "";
+    in-out property <string> jd-city: "WARSZAWA";
+    in-out property <string> jd-start-name: "Plac Defilad 1";
+    in-out property <string> jd-start-type: "ADDRESS";
+    in-out property <string> jd-start-lat: "52.2319";
+    in-out property <string> jd-start-lon: "21.0067";
+    in-out property <string> jd-start-code: "";
+    in-out property <string> jd-dest-name: "Międzynarodowa";
+    in-out property <string> jd-dest-type: "STOP_POINT";
+    in-out property <string> jd-dest-lat: "52.2299";
+    in-out property <string> jd-dest-lon: "21.0687";
+    in-out property <string> jd-dest-code: "209802";
+    in-out property <string> jd-buffer: "5";
+    in-out property <string> jd-avoid-lines: "";
+    in-out property <bool> jd-avoid-changes: false;
+    in-out property <bool> jd-prefer-metro: false;
+    in-out property <string> jd-preferred-lines: "";
+    in-out property <string> jd-save-status: "";
+
+    callback save-jakdojade-settings(bool, string, string, string, string, string, string, string, string, string, string, string, string, string, bool, bool, string);
+
+
 
     // Dashboard widgets properties
     in-out property <[DashboardGrade]> dashboard-recent-grades;
@@ -107,12 +138,20 @@ export component MainWindow inherits Window {
             active-page: active-page;
             user-name: user-name;
             lucky-number: lucky-number;
+            jd-enabled: jd-enabled;
+            jd-leave-time: jd-leave-time;
+            jd-arrival-info: jd-arrival-info;
+            jd-lesson-day: jd-lesson-day;
+            jd-route-lines: jd-route-lines;
+            jd-route-summary: jd-route-summary;
+            jd-status: jd-status;
             navigate(p) => {
                 active-page = p;
             }
             logout => { request-logout(); }
             refresh => { request-refresh(); }
         }
+
 
         Rectangle {
             background: Theme.background;
@@ -201,6 +240,52 @@ export component MainWindow inherits Window {
                 today-events: events-today;
                 past-events: events-past;
             }
+
+            SettingsView {
+                visible: active-page == 9;
+                jd-enabled: jd-enabled;
+                jd-city: jd-city;
+                jd-start-name: jd-start-name;
+                jd-start-type: jd-start-type;
+                jd-start-lat: jd-start-lat;
+                jd-start-lon: jd-start-lon;
+                jd-start-code: jd-start-code;
+                jd-dest-name: jd-dest-name;
+                jd-dest-type: jd-dest-type;
+                jd-dest-lat: jd-dest-lat;
+                jd-dest-lon: jd-dest-lon;
+                jd-dest-code: jd-dest-code;
+                jd-buffer: jd-buffer;
+                jd-avoid-lines: jd-avoid-lines;
+                jd-avoid-changes: jd-avoid-changes;
+                jd-prefer-metro: jd-prefer-metro;
+                jd-preferred-lines: jd-preferred-lines;
+                save-status: jd-save-status;
+                save-settings => {
+                    root.save-jakdojade-settings(
+                        self.jd-enabled,
+                        self.jd-city,
+                        self.jd-start-name,
+                        self.jd-start-type,
+                        self.jd-start-lat,
+                        self.jd-start-lon,
+                        self.jd-start-code,
+                        self.jd-dest-name,
+                        self.jd-dest-type,
+                        self.jd-dest-lat,
+                        self.jd-dest-lon,
+                        self.jd-dest-code,
+                        self.jd-buffer,
+                        self.jd-avoid-lines,
+                        self.jd-avoid-changes,
+                        self.jd-prefer-metro,
+                        self.jd-preferred-lines
+                    );
+                }
+            }
+
+
+
             
             // Update Dialog Overlay
             if root.show-update-dialog : Rectangle {

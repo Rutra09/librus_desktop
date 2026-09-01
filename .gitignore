@@ -2,3 +2,6 @@
 /uiguidenew
 /uiguide
 /szkolny-android-temp
+*.log
+*.json
+
