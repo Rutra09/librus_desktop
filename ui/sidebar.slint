@@ -1,14 +1,60 @@
 import { Theme } from "style.slint";
-import { VerticalBox, HorizontalBox, Button } from "std-widgets.slint";
-import { IconDisplay, IconSet } from "@lucide";
+import { Icon, Button, ButtonKind } from "kit.slint";
+import { IconSet, Icon as LucideIcon } from "@lucide";
 
+// ── NavItem ──────────────────────────────────────────────────────────────────
 
+component NavItem inherits Rectangle {
+    in property <LucideIcon> icon;
+    in property <bool> active: false;
+    in property <string> label;
+    callback clicked;
+
+    height: Theme.row-height;
+    border-radius: Theme.radius;
+    background: root.active ? Theme.accent-soft : ta.has-hover ? Theme.hover : transparent;
+    animate background { duration: Theme.motion-fast; easing: Theme.ease-standard; }
+
+    HorizontalLayout {
+        padding-left: 10px;
+        padding-right: 10px;
+        spacing: 10px;
+        alignment: start;
+
+        Icon {
+            icon: root.icon;
+            size: 16px;
+            // The row is 32 px and the glyph is 16; the icon box fills the row so
+            // the layout cannot pin it to the top edge above the label.
+            height: root.height;
+            tint: root.active ? Theme.accent-text : ta.has-hover ? Theme.text : Theme.text-3;
+            weight: 1.75;
+            animate tint { duration: Theme.motion-fast; easing: Theme.ease-standard; }
+        }
+
+        Text {
+            text: root.label;
+            font-size: Theme.text-body;
+            font-weight: root.active ? 600 : 400;
+            color: root.active ? Theme.accent-text : ta.has-hover ? Theme.text : Theme.text-2;
+            vertical-alignment: center;
+            animate color { duration: Theme.motion-fast; }
+        }
+    }
+
+    ta := TouchArea {
+        mouse-cursor: pointer;
+        clicked => { root.clicked(); }
+    }
+}
+
+// ── Sidebar ──────────────────────────────────────────────────────────────────
 
 export component Sidebar inherits Rectangle {
     in property <int> active-page;
     in property <string> user-name;
     in property <string> lucky-number;
-    
+
     // Jakdojade properties
     in property <bool> jd-enabled: true;
     in property <string> jd-leave-time: "";
@@ -18,309 +64,281 @@ export component Sidebar inherits Rectangle {
     in property <string> jd-route-summary: "";
     in property <string> jd-status: "";
 
-
     callback navigate(int);
     callback logout();
     callback refresh();
-    
-    background: #18181b; // zinc-900 hex
-    width: 250px; // w-64
-    height: 100%; // h-screen
-    
-    VerticalBox {
-        padding: Theme.padding;
-        spacing: Theme.gap;
-        
-        // Header
-        VerticalBox {
-            spacing: 4px;
-            Text {
-                text: "Librus";
-                font-size: 24px;
-                font-weight: 700;
-                color: #3b82f6; // blue-500
-            }
-            Text {
-                text: "Witaj, " + root.user-name;
-                font-size: 12px;
-                color: #a1a1aa; // zinc-400
-            }
-        }
-        
-        Rectangle { height: 1px; background: #27272a; } // border-zinc-800
-        
-        // Navigation
-        VerticalBox {
+
+    background: Theme.chrome-gradient;
+    width: Theme.sidebar-width;
+    height: 100%;
+
+    // Glass edge on the content side — the only thing separating chrome from page
+    Rectangle {
+        x: parent.width - 1px;
+        width: 1px;
+        height: 100%;
+        background: Theme.hairline-strong;
+    }
+
+    VerticalLayout {
+        padding-left: Theme.space-3;
+        padding-right: Theme.space-3;
+        padding-top: Theme.space-4;
+        padding-bottom: Theme.space-3;
+        spacing: Theme.space-2;
+
+        // ── Brand ────────────────────────────────────────────────────────────
+        HorizontalLayout {
+            spacing: 10px;
             alignment: start;
-            spacing: 4px;
-            
-            Rectangle {
-                height: 40px; background: root.active-page == 1 ? Theme.primary : transparent; border-radius: Theme.radius;
-                TouchArea {
-                    clicked => { root.navigate(1); }
-                    HorizontalBox {
-                        padding-left: 12px; padding-right: 12px; spacing: 12px; alignment: start;
-                        Rectangle { width: 20px; IconDisplay { icon: IconSet.LayoutDashboard; size: 20px; stroke-width: 2.3; stroke: root.active-page == 1 ? Theme.primary-foreground : Theme.muted-foreground; y: (parent.height - self.height) / 2; } }
-                        Text { text: "Dashboard"; font-size: 14px; color: root.active-page == 1 ? Theme.primary-foreground : Theme.muted-foreground; vertical-alignment: center; }
-                    }
-                }
-            }
-            Rectangle {
-                height: 40px; background: root.active-page == 2 ? Theme.primary : transparent; border-radius: Theme.radius;
-                TouchArea {
-                    clicked => { root.navigate(2); }
-                    HorizontalBox {
-                        padding-left: 12px; padding-right: 12px; spacing: 12px; alignment: start;
-                        Rectangle { width: 20px; IconDisplay { icon: IconSet.CalendarDays; size: 20px; stroke-width: 2.3; stroke: root.active-page == 2 ? Theme.primary-foreground : Theme.muted-foreground; y: (parent.height - self.height) / 2; } }
-                        Text { text: "Plan zajęć"; font-size: 14px; color: root.active-page == 2 ? Theme.primary-foreground : Theme.muted-foreground; vertical-alignment: center; }
-                    }
-                }
-            }
-            Rectangle {
-                height: 40px; background: root.active-page == 3 ? Theme.primary : transparent; border-radius: Theme.radius;
-                TouchArea {
-                    clicked => { root.navigate(3); }
-                    HorizontalBox {
-                        padding-left: 12px; padding-right: 12px; spacing: 12px; alignment: start;
-                        Rectangle { width: 20px; IconDisplay { icon: IconSet.GraduationCap; size: 20px; stroke-width: 2.3; stroke: root.active-page == 3 ? Theme.primary-foreground : Theme.muted-foreground; y: (parent.height - self.height) / 2; } }
-                        Text { text: "Oceny"; font-size: 14px; color: root.active-page == 3 ? Theme.primary-foreground : Theme.muted-foreground; vertical-alignment: center; }
-                    }
-                }
-            }
-            Rectangle {
-                height: 40px; background: root.active-page == 4 ? Theme.primary : transparent; border-radius: Theme.radius;
-                TouchArea {
-                    clicked => { root.navigate(4); }
-                    HorizontalBox {
-                        padding-left: 12px; padding-right: 12px; spacing: 12px; alignment: start;
-                        Rectangle { width: 20px; IconDisplay { icon: IconSet.Bell; size: 20px; stroke-width: 2.3; stroke: root.active-page == 4 ? Theme.primary-foreground : Theme.muted-foreground; y: (parent.height - self.height) / 2; } }
-                        Text { text: "Ogłoszenia"; font-size: 14px; color: root.active-page == 4 ? Theme.primary-foreground : Theme.muted-foreground; vertical-alignment: center; }
-                    }
-                }
-            }
-            Rectangle {
-                height: 40px; background: root.active-page == 5 ? Theme.primary : transparent; border-radius: Theme.radius;
-                TouchArea {
-                    clicked => { root.navigate(5); }
-                    HorizontalBox {
-                        padding-left: 12px; padding-right: 12px; spacing: 12px; alignment: start;
-                        Rectangle { width: 20px; IconDisplay { icon: IconSet.ClipboardList; size: 20px; stroke-width: 2.3; stroke: root.active-page == 5 ? Theme.primary-foreground : Theme.muted-foreground; y: (parent.height - self.height) / 2; } }
-                        Text { text: "Frekwencja"; font-size: 14px; color: root.active-page == 5 ? Theme.primary-foreground : Theme.muted-foreground; vertical-alignment: center; }
-                    }
-                }
-            }
-            Rectangle {
-                height: 40px; background: root.active-page == 6 ? Theme.primary : transparent; border-radius: Theme.radius;
-                TouchArea {
-                    clicked => { root.navigate(6); }
-                    HorizontalBox {
-                        padding-left: 12px; padding-right: 12px; spacing: 12px; alignment: start;
-                        Rectangle { width: 20px; IconDisplay { icon: IconSet.Mail; size: 20px; stroke-width: 2.3; stroke: root.active-page == 6 ? Theme.primary-foreground : Theme.muted-foreground; y: (parent.height - self.height) / 2; } }
-                        Text { text: "Wiadomości"; font-size: 14px; color: root.active-page == 6 ? Theme.primary-foreground : Theme.muted-foreground; vertical-alignment: center; }
-                    }
-                }
-            }
-            Rectangle {
-                height: 40px; background: root.active-page == 7 ? Theme.primary : transparent; border-radius: Theme.radius;
-                TouchArea {
-                    clicked => { root.navigate(7); }
-                    HorizontalBox {
-                        padding-left: 12px; padding-right: 12px; spacing: 12px; alignment: start;
-                        Rectangle { width: 20px; IconDisplay { icon: IconSet.StickyNote; size: 20px; stroke-width: 2.3; stroke: root.active-page == 7 ? Theme.primary-foreground : Theme.muted-foreground; y: (parent.height - self.height) / 2; } }
-                        Text { text: "Zadania domowe"; font-size: 14px; color: root.active-page == 7 ? Theme.primary-foreground : Theme.muted-foreground; vertical-alignment: center; }
-                    }
-                }
-            }
-            Rectangle {
-                height: 40px; background: root.active-page == 8 ? Theme.primary : transparent; border-radius: Theme.radius;
-                TouchArea {
-                    clicked => { root.navigate(8); }
-                    HorizontalBox {
-                        padding-left: 12px; padding-right: 12px; spacing: 12px; alignment: start;
-                        Rectangle { width: 20px; IconDisplay { icon: IconSet.CalendarRange; size: 20px; stroke-width: 2.3; stroke: root.active-page == 8 ? Theme.primary-foreground : Theme.muted-foreground; y: (parent.height - self.height) / 2; } }
-                        Text { text: "Terminarz"; font-size: 14px; color: root.active-page == 8 ? Theme.primary-foreground : Theme.muted-foreground; vertical-alignment: center; }
-                    }
-                }
-            }
-            Rectangle {
-                height: 40px; background: root.active-page == 9 ? Theme.primary : transparent; border-radius: Theme.radius;
-                TouchArea {
-                    clicked => { root.navigate(9); }
-                    HorizontalBox {
-                        padding-left: 12px; padding-right: 12px; spacing: 12px; alignment: start;
-                        Rectangle { width: 20px; IconDisplay { icon: IconSet.Settings; size: 20px; stroke-width: 2.3; stroke: root.active-page == 9 ? Theme.primary-foreground : Theme.muted-foreground; y: (parent.height - self.height) / 2; } }
+            height: 34px;
+            padding-left: 4px;
 
-                        Text { text: "Ustawienia"; font-size: 14px; color: root.active-page == 9 ? Theme.primary-foreground : Theme.muted-foreground; vertical-alignment: center; }
-                    }
+            Rectangle {
+                width: 26px;
+                height: 26px;
+                border-radius: Theme.radius;
+                background: Theme.accent-soft;
+                y: (parent.height - self.height) / 2;
+
+                Icon {
+                    icon: IconSet.BookOpen;
+                    size: 15px;
+                    tint: Theme.accent-text;
+                    weight: 1.75;
+                    x: (parent.width - self.width) / 2;
+                    y: (parent.height - self.height) / 2;
+                }
+            }
+
+            VerticalLayout {
+                spacing: 0px;
+                alignment: center;
+
+                Text {
+                    text: "Librus";
+                    font-size: Theme.text-body-lg;
+                    font-weight: 600;
+                    color: Theme.text;
+                }
+                Text {
+                    text: root.user-name;
+                    font-size: Theme.text-caption;
+                    color: Theme.text-3;
+                    overflow: elide;
                 }
             }
         }
-        
-        Rectangle { vertical-stretch: 1; } // Spacer
-        
-        // Footer (Jakdojade Widget, Lucky Number & Logout)
-        Rectangle { height: 1px; background: #27272a; }
 
-        VerticalBox {
-            spacing: 8px;
-            
-            // Jakdojade Commute Widget (Nad Szczęśliwym Numerkiem)
-            if root.jd-enabled : Rectangle {
-                background: #27272a; // zinc-800
-                border-radius: Theme.radius;
+        Rectangle { height: Theme.space-3; }
 
-                
-                VerticalBox {
-                    padding: 10px;
-                    spacing: 6px;
-                    
-                    // Header Row
-                    HorizontalBox {
-                        alignment: space-between;
-                        spacing: 4px;
-                        HorizontalBox {
-                            spacing: 6px;
-                            Rectangle {
-                                width: 14px;
-                                IconDisplay {
-                                    icon: IconSet.Bus;
-                                    size: 14px;
-                                    stroke-width: 2.2;
-                                    stroke: #3b82f6;
-                                    y: (parent.height - self.height) / 2;
-                                }
-                            }
-                            Text {
-                                text: "Dojazd do szkoły";
-                                font-size: 11px;
-                                font-weight: 700;
-                                color: #f4f4f5;
-                                vertical-alignment: center;
-                            }
-                        }
-                        if root.jd-lesson-day != "" : VerticalBox {
+        // ── Navigation ───────────────────────────────────────────────────────
+        NavItem {
+            icon: IconSet.LayoutDashboard;
+            label: "Pulpit";
+            active: root.active-page == 1;
+            clicked => { root.navigate(1); }
+        }
+        NavItem {
+            icon: IconSet.CalendarDays;
+            label: "Plan zajęć";
+            active: root.active-page == 2;
+            clicked => { root.navigate(2); }
+        }
+        NavItem {
+            icon: IconSet.GraduationCap;
+            label: "Oceny";
+            active: root.active-page == 3;
+            clicked => { root.navigate(3); }
+        }
+        NavItem {
+            icon: IconSet.ClipboardList;
+            label: "Frekwencja";
+            active: root.active-page == 5;
+            clicked => { root.navigate(5); }
+        }
+        NavItem {
+            icon: IconSet.StickyNote;
+            label: "Zadania domowe";
+            active: root.active-page == 7;
+            clicked => { root.navigate(7); }
+        }
+        NavItem {
+            icon: IconSet.Bell;
+            label: "Ogłoszenia";
+            active: root.active-page == 4;
+            clicked => { root.navigate(4); }
+        }
+        NavItem {
+            icon: IconSet.Mail;
+            label: "Wiadomości";
+            active: root.active-page == 6;
+            clicked => { root.navigate(6); }
+        }
+        NavItem {
+            icon: IconSet.CalendarRange;
+            label: "Terminarz";
+            active: root.active-page == 8;
+            clicked => { root.navigate(8); }
+        }
+
+        Rectangle { height: Theme.space-1; }
+        Rectangle { height: 1px; background: Theme.hairline-soft; }
+        Rectangle { height: Theme.space-1; }
+
+        NavItem {
+            icon: IconSet.Settings;
+            label: "Ustawienia";
+            active: root.active-page == 9;
+            clicked => { root.navigate(9); }
+        }
+
+        Rectangle { vertical-stretch: 1; min-height: Theme.space-4; }
+
+        // ── Commute ──────────────────────────────────────────────────────────
+        if root.jd-enabled : Rectangle {
+            background: Theme.surface;
+            border-radius: Theme.radius-lg;
+            border-width: 1px;
+            border-color: Theme.hairline-strong;
+
+            VerticalLayout {
+                padding: 12px;
+                spacing: Theme.space-2;
+
+                HorizontalLayout {
+                    spacing: Theme.space-2;
+                    // `alignment: start` would ignore the spacer below and leave
+                    // the day badge glued to the label instead of flush right.
+
+                    Icon {
+                        icon: IconSet.Bus;
+                        size: 13px;
+                        tint: Theme.accent-text;
+                        weight: 1.75;
+                        y: 1px;
+                    }
+                    Text {
+                        text: "Dojazd";
+                        font-size: Theme.text-caption;
+                        font-weight: 600;
+                        color: Theme.text-2;
+                        vertical-alignment: center;
+                    }
+                    Rectangle { horizontal-stretch: 1; }
+                    if root.jd-lesson-day != "" : Rectangle {
+                        height: 16px;
+                        border-radius: Theme.radius-xs;
+                        background: Theme.accent-soft;
+                        HorizontalLayout {
+                            padding-left: 5px;
+                            padding-right: 5px;
                             alignment: center;
-                            padding: 0px;
-                            Rectangle {
-                                background: #1e3a8a;
-                                border-radius: 4px;
-                                HorizontalBox {
-                                    padding-left: 6px;
-                                    padding-right: 6px;
-                                    padding-top: 2px;
-                                    padding-bottom: 2px;
-                                    Text {
-                                        text: root.jd-lesson-day;
-                                        font-size: 10px;
-                                        font-weight: 700;
-                                        color: #60a5fa;
-                                    }
-                                }
-                            }
-                        }
-
-
-                    }
-                    
-                    Rectangle { height: 1px; background: #3f3f46; }
-                    
-                    if root.jd-leave-time != "" : VerticalBox {
-                        spacing: 4px;
-                        padding: 0px;
-                        
-                        // Departure Time Row
-                        HorizontalBox {
-                            spacing: 6px;
-                            alignment: start;
                             Text {
-                                text: "Wyjdź o:";
-                                font-size: 11px;
-                                color: #a1a1aa;
-                                vertical-alignment: center;
-                            }
-                            Text {
-                                text: root.jd-leave-time;
-                                font-size: 20px;
-                                font-weight: 800;
-                                color: #22c55e;
+                                text: root.jd-lesson-day;
+                                font-size: Theme.text-caption;
+                                font-weight: 600;
+                                color: Theme.accent-text;
                                 vertical-alignment: center;
                             }
                         }
-                        
-                        // Arrival and Subject info
-                        Text {
-                            text: root.jd-arrival-info;
-                            font-size: 11px;
-                            font-weight: 600;
-                            color: #e4e4e7;
-                            wrap: word-wrap;
-                        }
-
-                        // Vehicle Lines
-                        if root.jd-route-lines != "" : HorizontalBox {
-                            spacing: 4px;
-                            alignment: start;
-                            Text {
-                                text: "Linie:";
-                                font-size: 10px;
-                                color: #a1a1aa;
-                            }
-                            Text {
-                                text: root.jd-route-lines;
-                                font-size: 11px;
-                                font-weight: 700;
-                                color: #60a5fa;
-                            }
-                        }
-                        
-                        // Full Route Details (Wrapping, readable)
-                        Text {
-                            text: root.jd-route-summary;
-                            font-size: 10px;
-                            color: #a1a1aa;
-                            wrap: word-wrap;
-                        }
                     }
-                    
-                    if root.jd-leave-time == "" : Text {
-                        text: root.jd-status != "" ? root.jd-status : "Ładowanie połączenia...";
-                        font-size: 10px;
-                        color: #a1a1aa;
+                }
+
+                if root.jd-leave-time != "" : VerticalLayout {
+                    spacing: 1px;
+                    alignment: start;
+
+                    Text {
+                        text: "Wyjdź o";
+                        font-size: Theme.text-caption;
+                        color: Theme.text-3;
+                    }
+                    Text {
+                        text: root.jd-leave-time;
+                        font-size: Theme.text-large;
+                        font-weight: 600;
+                        color: Theme.success;
+                        letter-spacing: -0.4px;
+                    }
+                    if root.jd-arrival-info != "" : Text {
+                        text: root.jd-arrival-info;
+                        font-size: Theme.text-caption;
+                        color: Theme.text-2;
+                        wrap: word-wrap;
+                    }
+                    if root.jd-route-lines != "" : Text {
+                        text: root.jd-route-lines;
+                        font-size: Theme.text-caption;
+                        font-weight: 600;
+                        color: Theme.accent-text;
                         wrap: word-wrap;
                     }
                 }
-            }
 
-            // Lucky Number Card
-            Rectangle {
-                background: #27272a; // zinc-800/50
-                border-radius: Theme.radius;
-                VerticalBox {
-                    padding: 12px;
-                    Text {
-                        text: "Szczęśliwy numer";
-                        font-size: 10px;
-                        color: #71717a; // zinc-500
-                    }
-                    Text {
-                        text: root.lucky-number;
-                        font-size: 20px;
-                        font-weight: 700;
-                        color: #3b82f6;
-                    }
+                if root.jd-leave-time == "" : Text {
+                    text: root.jd-status != "" ? root.jd-status : "Ładowanie połączenia…";
+                    font-size: Theme.text-caption;
+                    color: Theme.text-3;
+                    wrap: word-wrap;
                 }
             }
-            
-            Button {
-                text: "Odśwież dane";
-                clicked => { root.refresh(); }
+        }
+
+        // ── Lucky number ─────────────────────────────────────────────────────
+        if root.lucky-number != "" : Rectangle {
+            background: Theme.surface;
+            border-radius: Theme.radius-lg;
+            border-width: 1px;
+            border-color: Theme.hairline-strong;
+
+            HorizontalLayout {
+                padding-left: 12px;
+                padding-right: 12px;
+                height: 34px;
+                // Same as the commute header: without a stretchable spacer the
+                // number would sit right next to the label text.
+
+                Text {
+                    text: "Szczęśliwy numer";
+                    font-size: Theme.text-caption;
+                    color: Theme.text-3;
+                    vertical-alignment: center;
+                }
+                Rectangle { horizontal-stretch: 1; }
+                Text {
+                    text: root.lucky-number;
+                    font-size: Theme.text-body-lg;
+                    font-weight: 600;
+                    color: Theme.accent-text;
+                    vertical-alignment: center;
+                }
             }
+        }
+
+        // ── Footer ───────────────────────────────────────────────────────────
+        HorizontalLayout {
+            spacing: Theme.space-2;
+            height: 32px;
 
             Button {
-                text: "Wyloguj";
+                label: "Odśwież";
+                kind: ButtonKind.ghost;
+                small: true;
+                with-icon: true;
+                icon: IconSet.RefreshCw;
+                horizontal-stretch: 1;
+                clicked => { root.refresh(); }
+            }
+            Button {
+                label: "Wyloguj";
+                kind: ButtonKind.ghost;
+                small: true;
+                with-icon: true;
+                icon: IconSet.LogOut;
+                horizontal-stretch: 1;
                 clicked => { root.logout(); }
             }
         }
     }
 }
-

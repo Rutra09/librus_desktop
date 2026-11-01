@@ -1,5 +1,7 @@
+import { ScrollView } from "std-widgets.slint";
 import { Theme } from "style.slint";
-import { ListView } from "std-widgets.slint";
+import { Icon, Card, CardTitle, Divider, PageBody, PageHeader, Segmented, Meter, EmptyState } from "kit.slint";
+import { IconSet } from "@lucide";
 
 export struct UIAttendance {
     id: string,
@@ -12,75 +14,6 @@ export struct UIAttendance {
     topic: string,
 }
 
-component AttendanceItem inherits Rectangle {
-    in property <UIAttendance> attendance;
-    height: 60px;
-    background: Theme.card;
-    border-radius: 8px;
-    
-    HorizontalLayout {
-        padding: 10px;
-        spacing: 12px;
-        alignment: center;
-        
-        // Symbol / Color Badge
-        Rectangle {
-            width: 40px;
-            height: 40px;
-            border-radius: 20px;
-            background: attendance.color;
-            
-            Text {
-                text: attendance.symbol;
-                color: Colors.white;
-                font-size: 14px;
-                font-weight: 700;
-                vertical-alignment: center;
-                horizontal-alignment: center;
-            }
-        }
-        
-        // details
-        VerticalLayout {
-            alignment: center;
-            spacing: 2px;
-            
-            Text {
-                text: attendance.type_name;
-                font-size: 14px;
-                font-weight: 600;
-                color: Theme.foreground;
-            }
-            Text {
-                text: attendance.subject + (attendance.topic != "" ? " - " + attendance.topic : "");
-                font-size: 12px;
-                color: Theme.secondary-foreground;
-                overflow: elide;
-            }
-        }
-        
-        // Date & Lesson No
-        VerticalLayout {
-            alignment: center;
-            spacing: 2px;
-            horizontal-stretch: 0;
-            
-            Text {
-                text: attendance.date;
-                font-size: 12px;
-                color: Theme.secondary-foreground;
-                horizontal-alignment: right;
-            }
-            Text {
-                text: "Lekcja " + attendance.lesson_no;
-                font-size: 11px;
-                color: Theme.accent;
-                horizontal-alignment: right;
-            }
-        }
-    }
-}
-
 export struct UIAttendanceSubject {
     id: int,
     name: string,
@@ -89,146 +22,348 @@ export struct UIAttendanceSubject {
     absence_excused_count: int,
     late_count: int,
     total_count: int,
-    frequency: string, // "95%"
+    frequency: string,
 }
 
-component FrequencyTable inherits Rectangle {
-    in property <[UIAttendanceSubject]> subjects;
-    
-    VerticalLayout {
-        spacing: 0px;
-        
-        // Header
+// ── Entry row ───────────────────────────────────────────────────────────────
+
+component AttendanceRow inherits Rectangle {
+    in property <UIAttendance> attendance;
+
+    height: 56px;
+    border-radius: Theme.radius;
+    background: ta.has-hover ? Theme.hover : transparent;
+    animate background { duration: Theme.motion-fast; }
+
+    HorizontalLayout {
+        padding-left: Theme.space-3;
+        padding-right: Theme.space-3;
+        spacing: Theme.space-3;
+        alignment: start;
+
         Rectangle {
-            height: 40px;
-            background: Theme.background;
-            HorizontalLayout {
-                padding: 10px;
-                spacing: 1px;
-                Text { text: "Przedmiot"; width: 35%; font-weight: 700; color: Theme.foreground; overflow: elide; }
-                Text { text: "%"; width: 13%; font-weight: 700; color: Theme.foreground; horizontal-alignment: center; }
-                Text { text: "Ob."; width: 13%; font-weight: 700; color: Theme.foreground; horizontal-alignment: center; }
-                Text { text: "Nb."; width: 13%; font-weight: 700; color: Theme.foreground; horizontal-alignment: center; }
-                Text { text: "Usp."; width: 13%; font-weight: 700; color: Theme.foreground; horizontal-alignment: center; }
-                Text { text: "Sp."; width: 13%; font-weight: 700; color: Theme.foreground; horizontal-alignment: center; }
+            width: 28px;
+            height: 28px;
+            border-radius: Theme.radius-xl;
+            background: root.attendance.color.with-alpha(0.18);
+            border-width: 1px;
+            border-color: root.attendance.color.with-alpha(0.35);
+            y: (parent.height - self.height) / 2;
+
+            Text {
+                text: root.attendance.symbol;
+                color: root.attendance.color;
+                font-size: Theme.text-caption;
+                font-weight: 600;
+                vertical-alignment: center;
+                horizontal-alignment: center;
             }
         }
-        
-        ListView {
-            for subj[index] in root.subjects : Rectangle {
-                height: 40px;
-                background: index / 2 == 0 ? Theme.card : Theme.background; // Stripes
-                
-                HorizontalLayout {
-                    padding: 10px;
-                    spacing: 1px;
-                    Text { text: subj.name; width: 35%; color: Theme.foreground; overflow: elide; vertical-alignment: center; }
-                    Text { text: subj.frequency; width: 13%; color: Theme.primary; font-weight: 700; horizontal-alignment: center; vertical-alignment: center; }
-                    Text { text: subj.presence_count; width: 13%; color: #4caf50; horizontal-alignment: center; vertical-alignment: center; } // Green
-                    Text { text: subj.absence_unexcused_count; width: 13%; color: #f44336; horizontal-alignment: center; vertical-alignment: center; } // Red
-                    Text { text: subj.absence_excused_count; width: 13%; color: #2196f3; horizontal-alignment: center; vertical-alignment: center; } // Blue
-                    Text { text: subj.late_count; width: 13%; color: #ff9800; horizontal-alignment: center; vertical-alignment: center; } // Orange
+
+        VerticalLayout {
+            spacing: 1px;
+            alignment: center;
+            vertical-stretch: 1;
+
+            Text {
+                text: root.attendance.type_name;
+                font-size: Theme.text-body;
+                font-weight: 600;
+                color: Theme.text;
+                overflow: elide;
+            }
+            Text {
+                text: root.attendance.subject + (root.attendance.topic != "" ? "  ·  " + root.attendance.topic : "");
+                font-size: Theme.text-caption;
+                color: Theme.text-3;
+                overflow: elide;
+            }
+        }
+
+        VerticalLayout {
+            spacing: 1px;
+            alignment: center;
+            Text {
+                text: root.attendance.date;
+                font-size: Theme.text-caption;
+                color: Theme.text-3;
+                horizontal-alignment: right;
+            }
+            Text {
+                text: "lekcja " + root.attendance.lesson_no;
+                font-size: Theme.text-caption;
+                color: Theme.text-4;
+                horizontal-alignment: right;
+            }
+        }
+    }
+
+    ta := TouchArea {}
+}
+
+// ── Stats table ─────────────────────────────────────────────────────────────
+
+component StatHeader {
+    in property <string> label;
+    in property <bool> wide: false;
+
+    width: root.wide ? 0px : 46px;
+    horizontal-stretch: root.wide ? 1 : 0;
+
+    Text {
+        text: root.label;
+        font-size: Theme.text-caption;
+        font-weight: 600;
+        color: Theme.text-4;
+        horizontal-alignment: root.wide ? left : right;
+        vertical-alignment: center;
+        letter-spacing: 0.3px;
+    }
+}
+
+component StatRow {
+    in property <UIAttendanceSubject> subject;
+    in property <bool> last: false;
+
+    property <float> ratio: root.subject.total_count > 0
+        ? root.subject.presence_count / root.subject.total_count
+        : 0.0;
+    property <color> tone: root.ratio >= 0.9 ? Theme.success
+        : root.ratio >= 0.8 ? Theme.warning : Theme.danger;
+
+    VerticalLayout {
+        spacing: 0px;
+
+        HorizontalLayout {
+            padding-left: Theme.space-2;
+            padding-right: Theme.space-2;
+            spacing: Theme.space-2;
+            height: 40px;
+            alignment: start;
+
+            Text {
+                text: root.subject.name;
+                font-size: Theme.text-body;
+                color: Theme.text;
+                vertical-alignment: center;
+                overflow: elide;
+                horizontal-stretch: 1;
+            }
+
+            // % + meter
+            VerticalLayout {
+                width: 96px;
+                spacing: 3px;
+                alignment: center;
+                Text {
+                    text: root.subject.frequency;
+                    font-size: Theme.text-small;
+                    font-weight: 600;
+                    color: root.tone;
+                    horizontal-alignment: right;
+                }
+                Meter {
+                    value: root.ratio;
+                    tone: root.tone;
+                    thickness: 3px;
                 }
             }
+
+            Text {
+                text: root.subject.presence_count;
+                width: 40px;
+                font-size: Theme.text-small;
+                color: Theme.text-2;
+                horizontal-alignment: right;
+                vertical-alignment: center;
+            }
+            Text {
+                text: root.subject.absence_unexcused_count;
+                width: 40px;
+                font-size: Theme.text-small;
+                color: root.subject.absence_unexcused_count > 0 ? Theme.danger : Theme.text-4;
+                horizontal-alignment: right;
+                vertical-alignment: center;
+            }
+            Text {
+                text: root.subject.absence_excused_count;
+                width: 40px;
+                font-size: Theme.text-small;
+                color: Theme.text-2;
+                horizontal-alignment: right;
+                vertical-alignment: center;
+            }
+            Text {
+                text: root.subject.late_count;
+                width: 40px;
+                font-size: Theme.text-small;
+                color: root.subject.late_count > 0 ? Theme.warning : Theme.text-4;
+                horizontal-alignment: right;
+                vertical-alignment: center;
+            }
+        }
+
+        if !root.last : Rectangle {
+            height: 1px;
+            background: Theme.hairline-soft;
         }
     }
 }
 
+// ── View ────────────────────────────────────────────────────────────────────
+
 export component AttendanceView inherits Rectangle {
     in property <[UIAttendance]> attendances;
     in property <[UIAttendanceSubject]> stats;
-    in property <string> frequency_str; // "95.5%"
+    in property <string> frequency_str;
     in property <string> semester_name: "Semestr 1";
-    
-    // Tabs state
-    in-out property <int> active_tab: 0; // 0: List, 1: Stats
-    
-    VerticalLayout {
-        spacing: 0px;
-        padding: 0px;
-        
-        // Tab Bar
-        Rectangle {
-            height: 50px;
-            background: Theme.card;
-            
+
+    property <int> active-tab: 0;
+
+    background: Theme.bg-gradient;
+
+    ScrollView {
+        PageBody {
+            PageHeader {
+                title: "Frekwencja";
+                subtitle: "Obecności, spóźnienia i nieobecności";
+
+                Segmented {
+                    width: 200px;
+                    items: ["Lista", "Statystyki"];
+                    current: root.active-tab;
+                    changed(i) => { root.active-tab = i; }
+                }
+            }
+
+            // ── Summary ──────────────────────────────────────────────────────
             HorizontalLayout {
-                padding: 10px;
-                spacing: 20px;
-                alignment: center;
-                
-                // Tab 1: Lista
-                Rectangle {
-                    width: 120px;
-                    border-radius: 8px;
-                    background: root.active_tab == 0 ? Theme.background : Colors.transparent;
-                    animate background { duration: 200ms; }
-                    
-                    TouchArea {
-                        clicked => { root.active_tab = 0; }
-                    }
-                    
-                    Text {
-                        text: "Lista";
-                        color: root.active_tab == 0 ? Theme.foreground : Theme.secondary-foreground;
-                        font-weight: root.active_tab == 0 ? 700 : 400;
-                        horizontal-alignment: center;
-                        vertical-alignment: center;
+                spacing: Theme.space-4;
+                height: 88px;
+
+                Card {
+                    horizontal-stretch: 1;
+                    VerticalLayout {
+                        padding: Theme.space-4;
+                        spacing: 0px;
+                        alignment: center;
+                        Rectangle { vertical-stretch: 1; }
+                        Text {
+                            text: "Frekwencja ogółem";
+                            font-size: Theme.text-caption;
+                            font-weight: 600;
+                            color: Theme.text-3;
+                        }
+                        Text {
+                            text: root.frequency_str;
+                            font-size: Theme.text-large;
+                            font-weight: 600;
+                            color: Theme.text;
+                            letter-spacing: -0.5px;
+                        }
+                        Rectangle { vertical-stretch: 1; }
                     }
                 }
-                
-                // Tab 2: Statystyki
-                Rectangle {
-                    width: 120px;
-                    border-radius: 8px;
-                    background: root.active_tab == 1 ? Theme.background : Colors.transparent;
-                    animate background { duration: 200ms; }
-                    
-                    TouchArea {
-                        clicked => { root.active_tab = 1; }
+
+                Card {
+                    horizontal-stretch: 1;
+                    VerticalLayout {
+                        padding: Theme.space-4;
+                        spacing: 0px;
+                        alignment: center;
+                        Rectangle { vertical-stretch: 1; }
+                        Text {
+                            text: "Przedmioty";
+                            font-size: Theme.text-caption;
+                            font-weight: 600;
+                            color: Theme.text-3;
+                        }
+                        Text {
+                            text: "" + root.stats.length;
+                            font-size: Theme.text-large;
+                            font-weight: 600;
+                            color: Theme.text;
+                        }
+                        Rectangle { vertical-stretch: 1; }
                     }
-                    
-                    Text {
-                        text: "Statystyki";
-                        color: root.active_tab == 1 ? Theme.foreground : Theme.secondary-foreground;
-                        font-weight: root.active_tab == 1 ? 700 : 400;
-                        horizontal-alignment: center;
-                        vertical-alignment: center;
+                }
+
+                Card {
+                    horizontal-stretch: 1;
+                    VerticalLayout {
+                        padding: Theme.space-4;
+                        spacing: 0px;
+                        alignment: center;
+                        Rectangle { vertical-stretch: 1; }
+                        Text {
+                            text: "Wpisy";
+                            font-size: Theme.text-caption;
+                            font-weight: 600;
+                            color: Theme.text-3;
+                        }
+                        Text {
+                            text: "" + root.attendances.length;
+                            font-size: Theme.text-large;
+                            font-weight: 600;
+                            color: Theme.text;
+                        }
+                        Rectangle { vertical-stretch: 1; }
                     }
                 }
             }
-        }
-        
-        // Content
-        Rectangle {
-            // Tab 0: List
-            if root.active_tab == 0 : VerticalLayout {
-                spacing: 16px;
-                padding: 20px;
-                
-                // Header (Total Freq)
-                HorizontalLayout {
-                    height: 40px;
-                    spacing: 20px;
-                    Text { text: "Razem:"; font-size: 24px; font-weight: 700; color: Theme.foreground; vertical-alignment: center; }
-                    Text { text: root.frequency_str; font-size: 24px; font-weight: 700; color: Theme.primary; vertical-alignment: center; }
-                    Rectangle { horizontal-stretch: 1; }
-                }
-                
-                ListView {
-                    for att in root.attendances : AttendanceItem {
+
+            // ── List ─────────────────────────────────────────────────────────
+            if root.active-tab == 0 : Card {
+                VerticalLayout {
+                    padding: Theme.space-2;
+                    spacing: 0px;
+
+                    if root.attendances.length == 0 : VerticalLayout {
+                        height: 180px;
+                        alignment: center;
+                        EmptyState {
+                            icon: IconSet.ClipboardList;
+                            title: "Brak wpisów";
+                            message: "Frekwencja jest czysta.";
+                        }
+                    }
+
+                    for att in root.attendances : AttendanceRow {
                         attendance: att;
-                        width: parent.width;
                     }
                 }
             }
-            
-            // Tab 1: Stats
-            if root.active_tab == 1 : FrequencyTable {
-                subjects: root.stats;
-                width: parent.width;
-                height: parent.height; // Fill
+
+            // ── Stats ────────────────────────────────────────────────────────
+            if root.active-tab == 1 : Card {
+                VerticalLayout {
+                    padding: Theme.space-3;
+                    spacing: Theme.space-1;
+
+                    HorizontalLayout {
+                        padding-left: Theme.space-2;
+                        padding-right: Theme.space-2;
+                        spacing: Theme.space-2;
+                        height: 24px;
+
+                        StatHeader { label: "Przedmiot"; wide: true; }
+                        Rectangle { width: 96px; }
+                        StatHeader { label: "Ob."; }
+                        StatHeader { label: "Nb."; }
+                        StatHeader { label: "Usp."; }
+                        StatHeader { label: "Sp."; }
+                    }
+
+                    Divider {}
+
+                    for subj[idx] in root.stats : StatRow {
+                        subject: subj;
+                        last: idx == root.stats.length - 1;
+                    }
+                }
             }
+
+            Rectangle { vertical-stretch: 1; min-height: 0px; }
         }
     }
 }

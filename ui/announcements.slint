@@ -1,5 +1,7 @@
-import { VerticalBox, HorizontalBox, ScrollView, Button } from "std-widgets.slint";
+import { ScrollView } from "std-widgets.slint";
 import { Theme } from "style.slint";
+import { Icon, Card, Divider, PageBody, PageHeader, EmptyState } from "kit.slint";
+import { IconSet } from "@lucide";
 
 export struct UIAnnouncement {
     subject: string,
@@ -8,50 +10,62 @@ export struct UIAnnouncement {
     date: string,
 }
 
-component AnnouncementItem inherits Rectangle {
+component NoticeRow {
     in property <UIAnnouncement> item;
-    
-    background: Theme.card;
-    border-radius: Theme.radius;
-    border-width: 1px;
-    border-color: Theme.border;
-    
-    VerticalBox {
-        padding: Theme.padding;
-        spacing: 8px;
-        
-        HorizontalBox {
-            TextInput {
-                text: item.subject;
-                font-size: 16px;
-                color: Theme.foreground;
-                wrap: word-wrap;
-                read-only: true;
+    in property <bool> last: false;
+
+    VerticalLayout {
+        spacing: Theme.space-2;
+
+        HorizontalLayout {
+            spacing: Theme.space-3;
+            alignment: start;
+
+            Rectangle {
+                width: 26px;
+                height: 26px;
+                border-radius: Theme.radius-sm;
+                background: Theme.accent-soft;
+                y: 1px;
+                Icon {
+                    icon: IconSet.Bell;
+                    size: 13px;
+                    tint: Theme.accent-text;
+                    weight: 1.75;
+                    x: (parent.width - self.width) / 2;
+                    y: (parent.height - self.height) / 2;
+                }
             }
-            Rectangle { horizontal-stretch: 1; }
-            Text {
-                text: item.date;
-                font-size: 12px;
-                color: Theme.muted-foreground;
+
+            VerticalLayout {
+                spacing: 2px;
+                horizontal-stretch: 1;
+
+                Text {
+                    text: root.item.subject;
+                    font-size: Theme.text-body-lg;
+                    font-weight: 600;
+                    color: Theme.text;
+                    wrap: word-wrap;
+                }
+                Text {
+                    text: root.item.date + (root.item.author != "" ? "  ·  " + root.item.author : "");
+                    font-size: Theme.text-caption;
+                    color: Theme.text-3;
+                }
             }
         }
-        
-        TextInput {
-            text: item.content;
+
+        Text {
+            text: root.item.content;
+            font-size: Theme.text-body;
+            color: Theme.text-2;
             wrap: word-wrap;
-            font-size: 14px;
-            color: Theme.foreground;
-            read-only: true;
         }
-        
-        HorizontalBox {
-            Rectangle { horizontal-stretch: 1; }
-            Text {
-                text: "Dodał: " + item.author;
-                font-size: 12px;
-                color: Theme.muted-foreground;
-                font-italic: true;
-            }
+
+        if !root.last : Rectangle {
+            height: 1px;
+            background: Theme.hairline-soft;
         }
     }
 }
@@ -60,26 +74,40 @@ export component AnnouncementsView inherits Rectangle {
     in property <[UIAnnouncement]> notices;
     callback back();
 
-    background: Theme.background;
+    background: Theme.bg-gradient;
 
-    VerticalBox {
-        padding: Theme.padding;
-        spacing: Theme.gap;
+    ScrollView {
+        PageBody {
+            PageHeader {
+                title: "Ogłoszenia";
+                subtitle: root.notices.length == 1 ? "1 ogłoszenie" : root.notices.length + " ogłoszeń";
+            }
 
-        Text {
-            text: "Ogłoszenia";
-            font-size: 24px;
-            font-weight: 700;
-            color: Theme.foreground;
-        }
-
-        ScrollView {
-            VerticalBox {
-                spacing: Theme.gap;
-                for notice in notices : AnnouncementItem {
-                    item: notice;
+            if root.notices.length == 0 : Card {
+                height: 200px;
+                VerticalLayout {
+                    alignment: center;
+                    EmptyState {
+                        icon: IconSet.Bell;
+                        title: "Brak ogłoszeń";
+                        message: "Nic nowego od szkoły.";
+                    }
                 }
             }
+
+            if root.notices.length > 0 : Card {
+                VerticalLayout {
+                    padding: Theme.space-5;
+                    spacing: Theme.space-4;
+
+                    for notice[idx] in root.notices : NoticeRow {
+                        item: notice;
+                        last: idx == root.notices.length - 1;
+                    }
+                }
+            }
+
+            Rectangle { vertical-stretch: 1; min-height: 0px; }
         }
     }
 }

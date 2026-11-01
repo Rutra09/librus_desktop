@@ -1,11 +1,13 @@
-import { VerticalBox, HorizontalBox } from "std-widgets.slint";
-import { Theme } from "style.slint";
 import { ScrollView } from "std-widgets.slint";
+import { Theme } from "style.slint";
+import { Icon, Card, CardTitle, Divider, PageBody, PageHeader } from "kit.slint";
+import { IconSet } from "@lucide";
 
 export struct DashboardGrade {
     subject: string,
     grade: string,
     date: string,
+    tone: color,
 }
 
 export struct DashboardHomework {
@@ -24,6 +26,40 @@ export struct DashboardLesson {
     subject: string,
 }
 
+// ── Small pieces ─────────────────────────────────────────────────────────────
+
+component GradeChip inherits Rectangle {
+    in property <string> value;
+    in property <color> tone: Theme.accent;
+
+    width: 26px;
+    height: 26px;
+    border-radius: Theme.radius-sm;
+    background: root.tone.with-alpha(0.15);
+
+    Text {
+        text: root.value;
+        font-size: Theme.text-small;
+        font-weight: 600;
+        color: root.tone;
+        horizontal-alignment: center;
+        vertical-alignment: center;
+    }
+}
+
+component Hint {
+    in property <string> text;
+    Text {
+        text: root.text;
+        font-size: Theme.text-small;
+        color: Theme.text-4;
+        vertical-alignment: center;
+        horizontal-stretch: 1;
+    }
+}
+
+// ── Dashboard ────────────────────────────────────────────────────────────────
+
 export component DashboardView inherits Rectangle {
     in property <string> user-name;
     in property <string> lucky-number;
@@ -34,155 +70,317 @@ export component DashboardView inherits Rectangle {
     in property <[DashboardLesson]> next-day-timetable;
     in property <string> next-day-timetable-date;
 
-    background: Theme.background;
+    background: Theme.bg-gradient;
 
     ScrollView {
-        width: 100%; height: 100%;
-        VerticalBox {
-            padding: Theme.padding;
-            spacing: Theme.gap;
-            alignment: start;
-            
-            Text {
-                text: "Dashboard";
-                font-size: 24px;
-                font-weight: 700;
-                color: Theme.foreground;
+        PageBody {
+            // ── Header ───────────────────────────────────────────────────────
+            PageHeader {
+                title: "Pulpit";
+                subtitle: "Twój dzień w skrócie";
             }
-            
-            HorizontalBox {
-                 spacing: Theme.gap;
-                 alignment: start;
-                 vertical-stretch: 0;
-                 
-                 // Welcome Card
-                 Rectangle {
-                     background: Theme.card;
-                     border-radius: Theme.radius;
-                     border-width: 1px;
-                     border-color: Theme.border;
-                     width: 300px;
-                     height: 120px;
-                     
-                     VerticalBox {
-                         padding: Theme.padding;
-                         spacing: 4px;
-                         alignment: center;
-                         Text { text: "Witaj!"; font-size: 20px; font-weight: 700; color: Theme.foreground; }
-                         Text { text: root.user-name; font-size: 16px; color: Theme.muted-foreground; }
-                     }
-                 }
 
-                 // Lucky Number Card
-                 Rectangle {
-                     background: Theme.card;
-                     border-radius: Theme.radius;
-                     border-width: 1px;
-                     border-color: Theme.border;
-                     width: 200px;
-                     height: 120px;
-                     
-                     VerticalBox {
-                         padding: Theme.padding;
-                         spacing: 4px;
-                         alignment: center;
-                         Text { text: "Szczęśliwy Numer"; font-size: 12px; color: Theme.muted-foreground; }
-                         Text { text: root.lucky-number; font-size: 36px; font-weight: 700; color: Theme.primary; }
-                         Text { text: root.lucky-number-day; font-size: 10px; color: Theme.muted-foreground; }
-                     }
-                 }
-            }
-            
-            // Second row: Widgets
-            HorizontalBox {
-                spacing: Theme.gap;
-                alignment: start;
-                vertical-stretch: 0;
-                
-                // Recent Grades
-                Rectangle {
-                    background: Theme.card; border-radius: Theme.radius; border-width: 1px; border-color: Theme.border;
-                    width: 300px;
-                    VerticalBox {
-                        padding: Theme.padding; spacing: 8px; alignment: start;
-                        Text { text: "Ostatnie oceny"; font-size: 16px; font-weight: 600; color: Theme.foreground; }
-                        Rectangle { height: 1px; background: Theme.border; }
-                        for g in root.recent-grades : HorizontalBox {
-                            spacing: 8px; alignment: start;
-                            Text { text: g.grade; font-size: 18px; font-weight: 700; color: Theme.primary; vertical-alignment: center; }
-                            VerticalBox {
-                                spacing: 2px;
-                                Text { text: g.subject; font-size: 14px; color: Theme.foreground; overflow: elide; }
-                                Text { text: g.date; font-size: 10px; color: Theme.muted-foreground; }
-                            }
-                        }
-                    }
-                }
+            // ── Greeting + lucky number ──────────────────────────────────────
+            HorizontalLayout {
+                spacing: Theme.space-4;
+                height: 112px;
 
-                // Upcoming Homework
-                Rectangle {
-                    background: Theme.card; border-radius: Theme.radius; border-width: 1px; border-color: Theme.border;
-                    width: 400px;
-                    VerticalBox {
-                        padding: Theme.padding; spacing: 8px; alignment: start;
-                        Text { text: "Nadchodzące zadania"; font-size: 16px; font-weight: 600; color: Theme.foreground; }
-                        Rectangle { height: 1px; background: Theme.border; }
-                        for hw in root.upcoming-homework : VerticalBox {
+                Card {
+                    horizontal-stretch: 3;
+
+                    HorizontalLayout {
+                        padding: Theme.space-5;
+
+                        VerticalLayout {
                             spacing: 2px;
-                            HorizontalBox {
-                                spacing: 8px;
-                                Text { text: hw.subject; font-size: 14px; font-weight: 600; color: Theme.foreground; overflow: elide; }
-                                Text { text: hw.date; font-size: 12px; color: Theme.primary; horizontal-alignment: right; }
+                            alignment: start;
+
+                            Rectangle { vertical-stretch: 1; }
+
+                            Text {
+                                text: "Dzień dobry";
+                                font-size: Theme.text-small;
+                                color: Theme.text-3;
                             }
-                            Text { text: hw.content; font-size: 12px; color: Theme.muted-foreground; wrap: word-wrap; }
+                            Text {
+                                text: root.user-name;
+                                font-size: Theme.text-large;
+                                font-weight: 600;
+                                color: Theme.text;
+                                overflow: elide;
+                            }
+                            Rectangle { height: Theme.space-2; }
+                            Text {
+                                text: "Miłego dnia w szkole.";
+                                font-size: Theme.text-small;
+                                color: Theme.text-3;
+                            }
+
+                            Rectangle { vertical-stretch: 1; }
+                        }
+                    }
+                }
+
+                Card {
+                    horizontal-stretch: 1;
+                    min-width: 190px;
+
+                    VerticalLayout {
+                        padding: Theme.space-5;
+                        spacing: 0px;
+                        // No `alignment` here: setting it makes the layout pack
+                        // children at their preferred width instead of stretching
+                        // them, which shoved the label to the card's right edge.
+                        // The two stretching spacers below do the vertical centring.
+
+                        Rectangle { vertical-stretch: 1; }
+
+                        Text {
+                            text: "Szczęśliwy numer";
+                            font-size: Theme.text-caption;
+                            font-weight: 600;
+                            color: Theme.text-3;
+                            horizontal-alignment: center;
+                        }
+                        Text {
+                            text: root.lucky-number;
+                            font-size: Theme.text-display;
+                            font-weight: 600;
+                            color: Theme.accent-text;
+                            letter-spacing: -1px;
+                            horizontal-alignment: center;
+                        }
+                        Text {
+                            text: root.lucky-number-day;
+                            font-size: Theme.text-caption;
+                            color: Theme.text-4;
+                            horizontal-alignment: center;
+                        }
+
+                        Rectangle { vertical-stretch: 1; }
+                    }
+                }
+            }
+
+            // ── Grades + homework ────────────────────────────────────────────
+            HorizontalLayout {
+                spacing: Theme.space-4;
+
+                Card {
+                    horizontal-stretch: 1;
+
+                    VerticalLayout {
+                        padding: Theme.space-4;
+                        spacing: Theme.space-3;
+
+                        CardTitle {
+                            title: "Ostatnie oceny";
+                            with-icon: true;
+                            icon: IconSet.GraduationCap;
+                        }
+                        Divider {}
+
+                        if root.recent-grades.length == 0 : Hint { text: "Brak ocen do wyświetlenia."; }
+
+                        for g[idx] in root.recent-grades : VerticalLayout {
+                            spacing: 0px;
+
+                            HorizontalLayout {
+                                spacing: Theme.space-3;
+                                alignment: start;
+                                height: 30px;
+
+                                GradeChip {
+                                    value: g.grade;
+                                    tone: g.tone;
+                                    y: 2px;
+                                }
+                                VerticalLayout {
+                                    spacing: 0px;
+                                    alignment: center;
+                                    vertical-stretch: 1;
+                                    Text {
+                                        text: g.subject;
+                                        font-size: Theme.text-body;
+                                        font-weight: 500;
+                                        color: Theme.text;
+                                        overflow: elide;
+                                    }
+                                    Text {
+                                        text: g.date;
+                                        font-size: Theme.text-caption;
+                                        color: Theme.text-3;
+                                    }
+                                }
+                            }
+                            if idx < root.recent-grades.length - 1 : Rectangle {
+                                height: 1px;
+                                background: Theme.hairline-soft;
+                            }
+                        }
+                    }
+                }
+
+                Card {
+                    horizontal-stretch: 1;
+
+                    VerticalLayout {
+                        padding: Theme.space-4;
+                        spacing: Theme.space-3;
+
+                        CardTitle {
+                            title: "Nadchodzące zadania";
+                            with-icon: true;
+                            icon: IconSet.StickyNote;
+                        }
+                        Divider {}
+
+                        if root.upcoming-homework.length == 0 : Hint { text: "Nic nie jest zadane. Korzystaj."; }
+
+                        for hw[idx] in root.upcoming-homework : VerticalLayout {
+                            spacing: 0px;
+
+                            VerticalLayout {
+                                spacing: 3px;
+                                padding-bottom: Theme.space-2;
+                                padding-top: 2px;
+
+                                HorizontalLayout {
+                                    spacing: Theme.space-2;
+                                    alignment: start;
+
+                                    Text {
+                                        text: hw.subject;
+                                        font-size: Theme.text-body;
+                                        font-weight: 600;
+                                        color: Theme.text;
+                                        overflow: elide;
+                                    }
+                                    Rectangle { horizontal-stretch: 1; }
+                                    Text {
+                                        text: hw.date;
+                                        font-size: Theme.text-caption;
+                                        font-weight: 600;
+                                        color: Theme.accent-text;
+                                        vertical-alignment: center;
+                                    }
+                                }
+                                Text {
+                                    text: hw.content;
+                                    font-size: Theme.text-small;
+                                    color: Theme.text-2;
+                                    wrap: word-wrap;
+                                }
+                            }
+                            if idx < root.upcoming-homework.length - 1 : Rectangle {
+                                height: 1px;
+                                background: Theme.hairline-soft;
+                            }
                         }
                     }
                 }
             }
 
-            // Third row: Widgets
-            HorizontalBox {
-                spacing: Theme.gap;
-                alignment: start;
-                vertical-stretch: 0;
-                
-                // Next Day Timetable
-                Rectangle {
-                    background: Theme.card; border-radius: Theme.radius; border-width: 1px; border-color: Theme.border;
-                    width: 300px; height: 350px;
-                    VerticalBox {
-                        padding: Theme.padding; spacing: 8px; alignment: start;
-                        HorizontalBox {
-                            Text { text: "Plan zajęć"; font-size: 16px; font-weight: 600; color: Theme.foreground; }
-                            Text { text: root.next-day-timetable-date; font-size: 12px; color: Theme.muted-foreground; horizontal-alignment: right; vertical-alignment: bottom; }
+            // ── Timetable + announcements ────────────────────────────────────
+            HorizontalLayout {
+                spacing: Theme.space-4;
+
+                Card {
+                    horizontal-stretch: 1;
+
+                    VerticalLayout {
+                        padding: Theme.space-4;
+                        spacing: Theme.space-3;
+
+                        CardTitle {
+                            title: "Plan zajęć";
+                            with-icon: true;
+                            icon: IconSet.CalendarDays;
+                            meta: root.next-day-timetable-date;
                         }
-                        Rectangle { height: 1px; background: Theme.border; }
-                        for l in root.next-day-timetable : HorizontalBox {
-                            spacing: 12px; alignment: start;
-                            Text { text: l.time; font-size: 12px; color: Theme.muted-foreground; width: 80px; }
-                            Text { text: l.subject; font-size: 14px; color: Theme.foreground; overflow: elide; }
+                        Divider {}
+
+                        if root.next-day-timetable.length == 0 : Hint { text: "Brak lekcji — dzień wolny."; }
+
+                        for l[idx] in root.next-day-timetable : VerticalLayout {
+                            spacing: 0px;
+
+                            HorizontalLayout {
+                                spacing: Theme.space-3;
+                                alignment: start;
+                                height: 26px;
+
+                                Text {
+                                    text: l.time;
+                                    font-size: Theme.text-caption;
+                                    font-weight: 600;
+                                    color: Theme.text-3;
+                                    width: 46px;
+                                    vertical-alignment: center;
+                                }
+                                Text {
+                                    text: l.subject;
+                                    font-size: Theme.text-body;
+                                    color: Theme.text;
+                                    vertical-alignment: center;
+                                    overflow: elide;
+                                }
+                            }
+                            if idx < root.next-day-timetable.length - 1 : Rectangle {
+                                height: 1px;
+                                background: Theme.hairline-soft;
+                            }
                         }
                     }
                 }
 
-                // Recent Announcements
-                Rectangle {
-                    background: Theme.card; border-radius: Theme.radius; border-width: 1px; border-color: Theme.border;
-                    width: 400px; height: 350px;
-                    VerticalBox {
-                        padding: Theme.padding; spacing: 8px; alignment: start;
-                        Text { text: "Ostatnie ogłoszenia"; font-size: 16px; font-weight: 600; color: Theme.foreground; }
-                        Rectangle { height: 1px; background: Theme.border; }
-                        for a in root.recent-announcements : VerticalBox {
-                            spacing: 4px; padding-bottom: 8px;
-                            Text { text: a.title; font-size: 14px; font-weight: 500; color: Theme.foreground; wrap: word-wrap; }
-                            Text { text: a.date; font-size: 10px; color: Theme.muted-foreground; }
+                Card {
+                    horizontal-stretch: 1;
+
+                    VerticalLayout {
+                        padding: Theme.space-4;
+                        spacing: Theme.space-3;
+
+                        CardTitle {
+                            title: "Ostatnie ogłoszenia";
+                            with-icon: true;
+                            icon: IconSet.Bell;
+                        }
+                        Divider {}
+
+                        if root.recent-announcements.length == 0 : Hint { text: "Brak nowych ogłoszeń."; }
+
+                        for a[idx] in root.recent-announcements : VerticalLayout {
+                            spacing: 0px;
+
+                            VerticalLayout {
+                                spacing: 3px;
+                                padding-bottom: Theme.space-2;
+                                padding-top: 2px;
+
+                                Text {
+                                    text: a.title;
+                                    font-size: Theme.text-body;
+                                    font-weight: 500;
+                                    color: Theme.text;
+                                    wrap: word-wrap;
+                                }
+                                Text {
+                                    text: a.date;
+                                    font-size: Theme.text-caption;
+                                    color: Theme.text-3;
+                                }
+                            }
+                            if idx < root.recent-announcements.length - 1 : Rectangle {
+                                height: 1px;
+                                background: Theme.hairline-soft;
+                            }
                         }
                     }
                 }
             }
-            
-            Rectangle { vertical-stretch: 1; }
+
+            Rectangle { vertical-stretch: 1; min-height: 0px; }
         }
     }
 }

@@ -1,72 +1,147 @@
-import { VerticalBox, HorizontalBox, Button, ProgressIndicator, LineEdit } from "std-widgets.slint";
 import { Theme } from "style.slint";
+import { Icon, Button, ButtonKind, TextField } from "kit.slint";
+import { IconSet } from "@lucide";
 
 export component LoginView inherits Rectangle {
     in property <string> error-message;
     in property <bool> is-loading;
     callback login(string, string);
 
-    background: Theme.background;
+    background: Theme.bg-gradient;
 
-    VerticalBox {
+    property <string> email;
+    property <string> password;
+
+    VerticalLayout {
         alignment: center;
-        
+        padding: Theme.space-8;
+
         Rectangle {
-            background: Theme.card;
-            border-radius: Theme.radius;
+            width: 340px;
+            background: Theme.surface;
+            border-radius: Theme.radius-2xl;
             border-width: 1px;
-            border-color: Theme.border;
-            width: 350px;
-            // height: auto;
-            
-            VerticalBox {
-                padding: 40px;
-                spacing: 20px;
-                alignment: center;
+            border-color: Theme.hairline-strong;
+            drop-shadow-blur: 50px;
+            drop-shadow-offset-y: 16px;
+            drop-shadow-color: #00000070;
+
+            VerticalLayout {
+                padding: 32px;
+                spacing: Theme.space-4;
+
+                // ── Mark + title ─────────────────────────────────────────────
+                VerticalLayout {
+                    spacing: Theme.space-3;
+                    alignment: center;
+                    padding-bottom: Theme.space-2;
+
+                    Rectangle {
+                        width: 40px;
+                        height: 40px;
+                        border-radius: Theme.radius-lg;
+                        background: Theme.accent-soft;
+
+                        Icon {
+                            icon: IconSet.BookOpen;
+                            size: 20px;
+                            tint: Theme.accent-text;
+                            weight: 1.75;
+                            x: (parent.width - self.width) / 2;
+                            y: (parent.height - self.height) / 2;
+                        }
+                    }
+
+                    VerticalLayout {
+                        spacing: 2px;
+                        Text {
+                            text: "Librus";
+                            font-size: Theme.text-large;
+                            font-weight: 600;
+                            color: Theme.text;
+                            horizontal-alignment: center;
+                        }
+                        Text {
+                            text: "Zaloguj się do dziennika";
+                            font-size: Theme.text-small;
+                            color: Theme.text-3;
+                            horizontal-alignment: center;
+                        }
+                    }
+                }
+
+                // ── Fields ───────────────────────────────────────────────────
+                TextField {
+                    label: "Adres e-mail";
+                    placeholder: "np. jan.kowalski@szkola.pl";
+                    enabled: !root.is-loading;
+                    edited(v) => { root.email = v; }
+                    accepted => {
+                        if !root.is-loading {
+                            root.login(root.email, root.password);
+                        }
+                    }
+                }
+
+                TextField {
+                    label: "Hasło";
+                    placeholder: "••••••••";
+                    password: true;
+                    enabled: !root.is-loading;
+                    edited(v) => { root.password = v; }
+                    accepted => {
+                        if !root.is-loading {
+                            root.login(root.email, root.password);
+                        }
+                    }
+                }
+
+                // ── Error ────────────────────────────────────────────────────
+                if root.error-message != "" : Rectangle {
+                    background: Theme.danger.with-alpha(0.10);
+                    border-radius: Theme.radius;
+                    border-width: 1px;
+                    border-color: Theme.danger.with-alpha(0.25);
+
+                    HorizontalLayout {
+                        padding: 10px;
+                        spacing: Theme.space-2;
+                        alignment: start;
+
+                        Icon {
+                            icon: IconSet.TriangleAlert;
+                            size: 14px;
+                            tint: Theme.danger;
+                            weight: 1.75;
+                            y: 1px;
+                        }
+                        Text {
+                            text: root.error-message;
+                            font-size: Theme.text-small;
+                            color: Theme.danger;
+                            wrap: word-wrap;
+                            horizontal-stretch: 1;
+                        }
+                    }
+                }
+
+                // ── Submit ───────────────────────────────────────────────────
+                Button {
+                    label: root.is-loading ? "Logowanie…" : "Zaloguj się";
+                    kind: ButtonKind.primary;
+                    large: true;
+                    enabled: !root.is-loading;
+                    clicked => {
+                        root.login(root.email, root.password);
+                    }
+                }
 
                 Text {
-                    text: "Librus Login";
-                    font-size: 24px;
-                    font-weight: 700;
-                    color: Theme.foreground;
+                    text: "Użyj danych logowania, które otrzymałeś od szkoły.";
+                    font-size: Theme.text-caption;
+                    color: Theme.text-4;
                     horizontal-alignment: center;
-                }
-                
-                email_input := LineEdit {
-                     placeholder-text: "Email";
-                     font-size: 14px;
-                     height: 40px;
-                     enabled: !root.is-loading;
-                }
-
-                password_input := LineEdit {
-                     placeholder-text: "Hasło";
-                     input-type: password;
-                     font-size: 14px;
-                     height: 40px;
-                     enabled: !root.is-loading;
-                }
-
-                if root.error-message != "" : Text {
-                    text: root.error-message;
-                    color: Theme.destructive;
                     wrap: word-wrap;
-                    horizontal-alignment: center;
-                }
-
-                if root.is-loading : ProgressIndicator {
-                    indeterminate: true;
-                    height: 40px;
-                    width: 40px;
-                }
-
-                if !root.is-loading : Button {
-                    text: "Zaloguj";
-                    height: 40px;
-                    width: 100%;
-                    clicked => {
-                        root.login(email_input.text, password_input.text);
-                    }
                 }
             }
         }

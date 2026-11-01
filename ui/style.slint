@@ -1,27 +1,110 @@
+// ─────────────────────────────────────────────────────────────────────────────
+//  Librus Desktop — design tokens
+//
+//  Taken from the Glint §5 / Tuck §9 design contract (the two sibling apps):
+//  one accent, three text tiers, hairline edges instead of borders, 4 DIP grid,
+//  depth from surface steps rather than shadows, fades capped at 140 ms.
+//
+//  Deviations are deliberate and marked NOTE.
+//
+//  Note on hex: Slint reads 8-digit colors as #AARRGGBB (alpha FIRST).
+// ─────────────────────────────────────────────────────────────────────────────
+
 export global Theme {
-    // Dark Theme (Matches .dark in theme.css)
-    out property <color> background: #252525; // oklch(0.145 0 0)
-    out property <color> surface: #2e2e2e; // Same as card for now
-    out property <color> foreground: #fcfcfc; // oklch(0.985 0 0)
-    out property <color> card: #2e2e2e; // darker card
-    out property <color> card-foreground: #fcfcfc;
-    out property <color> popover: #252525;
-    out property <color> popover-foreground: #fcfcfc;
-    out property <color> primary: #ececec; // oklch(0.985 0 0)
-    out property <color> primary-foreground: #333333; // oklch(0.205 0 0)
-    out property <color> secondary: #3f3f3f; // oklch(0.269 0 0)
-    out property <color> secondary-foreground: #fcfcfc;
-    out property <color> muted: #3f3f3f;
-    out property <color> muted-foreground: #a1a1aa; // oklch(0.708 0 0)
-    out property <color> accent: #3f3f3f;
-    out property <color> accent-foreground: #fcfcfc;
-    out property <color> destructive: #7f1d1d; // manual dark red
-    out property <color> destructive-foreground: #fcfcfc;
-    out property <color> border: #3f3f3f;
-    out property <color> input: #3f3f3f;
-    out property <color> ring: #6b7280; // oklch(0.439 0 0)
-    
-    out property <length> radius: 10px;
-    out property <length> padding: 16px;
-    out property <length> gap: 12px;
+    // ── Typography ───────────────────────────────────────────────────────────
+    // Contract: Segoe UI Variable Text ≤ 15 DIP, Display ≥ 20 DIP.
+    // Slint has no global font-family hook (Window/Rectangle don't carry font
+    // properties), so the platform default — Segoe UI on Windows — is used and
+    // only the scale is centralised here.
+    //
+    // Contract scale: caption 11 · body 13 · emphasized 13 · title 15 ·
+    // large title 22. Hierarchy comes from weight, not size, so there is no
+    // size between 15 and 22 — that is the Apple rule the contract encodes.
+    out property <length> text-caption: 11px;   // metadata, labels
+    out property <length> text-small: 12px;     // dense secondary (NOTE: Tuck-only step)
+    out property <length> text-body: 13px;      // default
+    out property <length> text-body-lg: 13px;   // row titles — same size, semibold
+    out property <length> text-title: 15px;     // section titles
+    out property <length> text-large: 22px;     // page titles
+    out property <length> text-display: 22px;   // hero figures — contract has no 34px step
+
+    // ── Spacing (4px grid) ───────────────────────────────────────────────────
+    out property <length> space-1: 4px;
+    out property <length> space-2: 8px;
+    out property <length> space-3: 12px;
+    out property <length> space-4: 16px;
+    out property <length> space-5: 20px;
+    out property <length> space-6: 24px;
+    out property <length> space-8: 32px;
+
+    // ── Radii ────────────────────────────────────────────────────────────────
+    // Contract: button 8, card 10, popover 12, window 8, thumbnail 10.
+    out property <length> radius-xs: 4px;      // tiny chips
+    out property <length> radius-sm: 6px;      // tags, badges, thumbnails
+    out property <length> radius: 8px;         // buttons, inputs, nav rows
+    out property <length> radius-lg: 10px;     // cards
+    out property <length> radius-xl: 12px;     // grouped sections
+    out property <length> radius-2xl: 12px;    // popovers and modals (contract: 12)
+
+    // ── Surfaces ─────────────────────────────────────────────────────────────
+    // Contract glass fill is rgba(30,30,32,0.70) over a blurred backdrop.
+    // Slint cannot blur what is behind the window, so the fill is composited
+    // on the dark desktop and shipped opaque: 30,30,32.
+    out property <color> bg: #1e1e20;           // window
+    out property <color> chrome: #1a1a1c;       // sidebar, recessed one step
+    out property <color> surface: #26262a;      // cards, grouped sections
+    out property <color> surface-hover: #2c2c31;
+    out property <color> surface-active: #35353a;
+    out property <color> popover: #2a2a2e;
+
+    // Glass reads as a pane, not a flat fill: a shallow vertical falloff, the
+    // way Glint's blurred backdrop lightens toward the top edge.
+    out property <brush> bg-gradient: @linear-gradient(180deg, #232327 0%, #1b1b1d 100%);
+    out property <brush> chrome-gradient: @linear-gradient(180deg, #1c1c1f 0%, #17171a 100%);
+
+    // ── Text ─────────────────────────────────────────────────────────────────
+    // Contract: 0.92 / 0.60 / 0.35 white.
+    out property <color> text: #ebebeb;         // 0.92 white
+    out property <color> text-2: #99999d;       // 0.60 white — secondary
+    out property <color> text-3: #7c7c80;       // ~0.40 — tertiary (NOTE: 0.35 → 0.40 for 3:1)
+    out property <color> text-4: #5a5a5e;       // ~0.22 — disabled / decorative only
+
+    // ── Lines ────────────────────────────────────────────────────────────────
+    out property <color> hairline: #ffffff14;       // 8% — dividers inside a surface
+    out property <color> hairline-soft: #ffffff0a;  // 4% — whisper dividers
+    out property <color> hairline-strong: #ffffff24;// 14% — glass edges (window, cards, modals)
+
+    // ── Accent ───────────────────────────────────────────────────────────────
+    out property <color> accent: #0a84ff;
+    out property <color> accent-text: #4fa8ff;   // brighter, for text on dark
+    out property <color> accent-soft: #0a84ff24; // 14% tint
+    out property <color> accent-softer: #0a84ff14;
+    out property <color> on-accent: #ffffff;
+
+    // ── Semantic ─────────────────────────────────────────────────────────────
+    out property <color> success: #30d158;
+    out property <color> warning: #ff9f0a;
+    out property <color> danger: #ff453a;
+
+    // ── Control tints ────────────────────────────────────────────────────────
+    // Contract: hover 0.08, pressed 0.14, selected 0.20.
+    out property <color> hover: #ffffff14;    // 8%
+    out property <color> pressed: #ffffff24;  // 14%
+    out property <color> selected: #ffffff33; // 20%
+
+    // ── Motion ───────────────────────────────────────────────────────────────
+    // Contract: fades 140 ms cubic-bezier(0.2, 0, 0, 1); springs elsewhere;
+    // nothing over 350 ms.
+    out property <duration> motion-fast: 140ms;
+    out property <duration> motion: 180ms;
+    out property <duration> motion-slow: 260ms;
+
+    out property <easing> ease-out-strong: cubic-bezier(0.23, 1, 0.32, 1);
+    out property <easing> ease-in-out-strong: cubic-bezier(0.77, 0, 0.175, 1);
+    out property <easing> ease-standard: cubic-bezier(0.2, 0, 0, 1);
+
+    // ── Layout ───────────────────────────────────────────────────────────────
+    out property <length> sidebar-width: 240px;
+    out property <length> page-padding: 24px;   // 4 DIP grid
+    out property <length> row-height: 32px;     // contract control height
 }

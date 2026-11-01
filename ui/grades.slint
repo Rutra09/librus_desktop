@@ -1,5 +1,10 @@
-import { VerticalBox, HorizontalBox, ScrollView, Button, Slider } from "std-widgets.slint";
+import { ScrollView } from "std-widgets.slint";
 import { Theme } from "style.slint";
+import {
+    Icon, Button, ButtonKind, IconButton, Card, Divider, PageBody, PageHeader,
+    Segmented, Modal,
+} from "kit.slint";
+import { IconSet } from "@lucide";
 
 export struct UIGrade {
     value: string,
@@ -20,372 +25,433 @@ export struct UISubjectGrades {
     grades-s2: [UIGrade],
 }
 
-component DetailPopover inherits Rectangle {
-    in property <bool> open;
-    in property <UIGrade> grade;
-    in property <string> subject;
-    callback close;
-
-    visible: open;
-    
-    // Backdrop with fade
-    TouchArea {
-        width: 100%;
-        height: 100%;
-        clicked => { root.close(); }
-    }
-    Rectangle {
-        background: #00000080;
-        width: 100%;
-        height: 100%;
-        opacity: open ? 1.0 : 0.0;
-        animate opacity { duration: 200ms; }
-    }
-
-    // Popover Content
-    Rectangle {
-        width: 320px;
-        height: content-layout.preferred-height; // Use preferred height
-        background: Theme.popover;
-        border-radius: Theme.radius;
-        border-width: 1px;
-        border-color: Theme.border;
-        
-        // Cetering
-        x: (parent.width - self.width) / 2;
-        y: (parent.height - self.height) / 2 + (open ? 0px : 10px); // Slide effect
-
-        // Animate
-        opacity: open ? 1.0 : 0.0;
-        animate opacity { duration: 200ms; easing: ease-out; }
-        animate y { duration: 200ms; easing: ease-out; }
-
-        content-layout := VerticalBox {
-            padding: Theme.padding;
-            spacing: Theme.gap;
-            alignment: center;
-
-            // Header
-            TextInput {
-                text: root.subject;
-                font-size: 14px;
-                color: Theme.muted-foreground;
-                horizontal-alignment: center;
-                read-only: true;
-            }
-            
-            // Grade Value Display
-            Rectangle {
-                width: 72px;
-                height: 72px;
-                background: root.grade.color;
-                border-radius: Theme.radius;
-                
-                Text {
-                    text: root.grade.value;
-                    color: white;
-                    font-size: 32px;
-                    font-weight: 700;
-                    horizontal-alignment: center;
-                    vertical-alignment: center;
-                }
-            }
-            
-            // Details
-            VerticalBox {
-                spacing: 8px;
-                alignment: center;
-                
-                Text {
-                    text: root.grade.desc;
-                    font-weight: 600;
-                    font-size: 16px;
-                    color: Theme.foreground;
-                    wrap: word-wrap;
-                    horizontal-alignment: center;
-                }
-                
-                if root.grade.comment != "" : Rectangle {
-                    background: #1e3a5f;
-                    border-radius: 8px;
-                    width: 280px;
-                    height: 80px;
-                    VerticalBox {
-                        padding: 8px;
-                        ScrollView {
-                            TextInput {
-                                text: root.grade.comment;
-                                font-size: 13px;
-                                color: #93c5fd;
-                                wrap: word-wrap;
-                                read-only: true;
-                                single-line: false;
-                            }
-                        }
-                    }
-                }
-                
-                TextInput {
-                    text: root.grade.date;
-                    font-size: 13px;
-                    color: Theme.muted-foreground;
-                    read-only: true;
-                    horizontal-alignment: center;
-                }
-                
-                if root.grade.weight != "" : TextInput {
-                    text: "Waga: " + root.grade.weight;
-                    font-size: 13px;
-                    color: Theme.muted-foreground;
-                    read-only: true;
-                    horizontal-alignment: center;
-                }
-            }
-            
-            // Footer Action
-            Button {
-                text: "Zamknij";
-                clicked => { root.close(); }
-                height: 36px;
-            }
-        }
-    }
-}
+// ── Grade badge ──────────────────────────────────────────────────────────────
+// Tinted rather than filled: the hue carries the meaning, the surface stays calm.
 
 component GradeBadge inherits Rectangle {
     in property <UIGrade> grade;
     callback clicked;
-    
-    width: 36px;
-    height: 36px;
-    border-radius: Theme.radius;
-    background: grade.color;
-    
-    TouchArea {
-        clicked => { root.clicked(); }
-        width: 100%;
-        height: 100%;
-    }
 
-    Text {
-        text: grade.value;
-        color: white; 
+    width: max(30px, txt.preferred-width + 18px);
+    height: 30px;
+    border-radius: Theme.radius-sm;
+    background: root.grade.color.with-alpha(ta.has-hover ? 0.28 : 0.15);
+    border-width: 1px;
+    border-color: root.grade.color.with-alpha(ta.has-hover ? 0.45 : 0.25);
+
+    animate background { duration: Theme.motion-fast; easing: Theme.ease-standard; }
+    animate border-color { duration: Theme.motion-fast; easing: Theme.ease-standard; }
+
+    transform-scale: ta.pressed ? 0.94 : 1.0;
+    animate transform-scale { duration: Theme.motion-fast; easing: Theme.ease-out-strong; }
+
+    txt := Text {
+        text: root.grade.value;
+        font-size: Theme.text-small;
         font-weight: 600;
+        color: root.grade.color;
         horizontal-alignment: center;
         vertical-alignment: center;
-        font-size: 14px;
+    }
+
+    ta := TouchArea {
+        mouse-cursor: pointer;
+        clicked => { root.clicked(); }
     }
 }
 
-component AddGradePopover inherits Rectangle {
-    in property <bool> open;
-    in property <string> subject-name;
-    callback add(string, float); // value, weight
-    callback close;
+// ── Subject row ──────────────────────────────────────────────────────────────
 
-    visible: open;
-    
-    out property <string> selected-value: "5";
-    out property <float> selected-weight: 1.0;
+component SubjectRow {
+    in property <UISubjectGrades> subject;
+    in property <int> semester: 2;
+    in property <bool> last: false;
+    callback grade-clicked(UIGrade);
+    callback add-requested;
 
-    // Backdrop
-    TouchArea {
-        width: 100%;
-        height: 100%;
-        clicked => { root.close(); }
-    }
-    Rectangle {
-        background: #00000080;
-        width: 100%;
-        height: 100%;
-        opacity: open ? 1.0 : 0.0;
-        animate opacity { duration: 200ms; }
-    }
+    property <[UIGrade]> grades: root.semester == 1 ? root.subject.grades-s1 : root.subject.grades-s2;
+    property <string> avg: root.semester == 1 ? root.subject.average-s1 : root.subject.average-s2;
 
-    // Modal
-    Rectangle {
-        width: 300px;
-        height: 350px;
-        background: Theme.popover;
-        border-radius: Theme.radius;
-        border-width: 1px;
-        border-color: Theme.border;
-        x: (parent.width - self.width) / 2;
-        y: (parent.height - self.height) / 2;
-        
-        TouchArea {} // Block clicks
+    VerticalLayout {
+        spacing: Theme.space-2;
 
-        VerticalBox {
-            padding: Theme.padding;
-            spacing: Theme.gap;
+        HorizontalLayout {
+            spacing: Theme.space-2;
+            alignment: start;
+            height: 26px;
+
+            Text {
+                text: root.subject.subject_name;
+                font-size: Theme.text-body-lg;
+                font-weight: 600;
+                color: Theme.text;
+                vertical-alignment: center;
+                overflow: elide;
+                horizontal-stretch: 1;
+            }
+
+            if root.avg != "" : HorizontalLayout {
+                spacing: 4px;
+                alignment: end;
+                Text {
+                    text: "średnia";
+                    font-size: Theme.text-caption;
+                    color: Theme.text-3;
+                    vertical-alignment: center;
+                }
+                Text {
+                    text: root.avg;
+                    font-size: Theme.text-body;
+                    font-weight: 600;
+                    color: Theme.accent-text;
+                    vertical-alignment: center;
+                }
+            }
+
+            IconButton {
+                icon: IconSet.Plus;
+                size: 24px;
+                icon-size: 14px;
+                clicked => { root.add-requested(); }
+            }
+        }
+
+        if root.grades.length == 0 : Text {
+            text: "Brak ocen w tym semestrze";
+            font-size: Theme.text-caption;
+            color: Theme.text-4;
+        }
+
+        if root.grades.length > 0 : HorizontalLayout {
+            spacing: 6px;
             alignment: start;
 
-            Text { 
-                text: "Symulacja oceny: " + root.subject-name; 
-                font-weight: 700; 
-                color: Theme.foreground;
+            for grade in root.grades : GradeBadge {
+                grade: grade;
+                clicked => { root.grade-clicked(grade); }
+            }
+            Rectangle { horizontal-stretch: 1; }
+        }
+
+        if !root.last : Rectangle {
+            height: 1px;
+            background: Theme.hairline-soft;
+        }
+    }
+}
+
+// ── Detail modal ─────────────────────────────────────────────────────────────
+
+component GradeDetailModal inherits Rectangle {
+    in property <bool> open: false;
+    in property <UIGrade> grade;
+    in property <string> subject;
+    callback dismiss;
+
+    Modal {
+        open: root.open;
+        panel-width: 320px;
+        dismiss => { root.dismiss(); }
+
+        Text {
+            text: root.subject;
+            font-size: Theme.text-small;
+            font-weight: 600;
+            color: Theme.text-3;
+            horizontal-alignment: center;
+            wrap: word-wrap;
+        }
+
+        HorizontalLayout {
+            alignment: center;
+            Rectangle {
+                width: 68px;
+                height: 68px;
+                border-radius: Theme.radius-lg;
+                background: root.grade.color.with-alpha(0.15);
+                border-width: 1px;
+                border-color: root.grade.color.with-alpha(0.3);
+
+                Text {
+                    text: root.grade.value;
+                    font-size: Theme.text-large;
+                    font-weight: 600;
+                    color: root.grade.color;
+                    horizontal-alignment: center;
+                    vertical-alignment: center;
+                }
+            }
+        }
+
+        VerticalLayout {
+            spacing: Theme.space-1;
+            Text {
+                text: root.grade.desc;
+                font-size: Theme.text-body-lg;
+                font-weight: 600;
+                color: Theme.text;
+                horizontal-alignment: center;
                 wrap: word-wrap;
             }
+            Text {
+                text: root.grade.date + (root.grade.weight != "" ? "  ·  waga " + root.grade.weight : "");
+                font-size: Theme.text-small;
+                color: Theme.text-3;
+                horizontal-alignment: center;
+            }
+        }
 
-            Text { text: "Ocena:"; color: Theme.muted-foreground; }
-            HorizontalBox {
-                spacing: 8px;
-                // Simple row of buttons for common grades
-                for g in ["1", "2", "3", "4", "5", "6"] : Button {
-                    text: g;
-                    primary: root.selected-value == g;
-                    width: 30px;
-                    clicked => { root.selected-value = g; }
+        if root.grade.comment != "" : Rectangle {
+            background: #ffffff0a;
+            border-radius: Theme.radius;
+
+            VerticalLayout {
+                padding: Theme.space-3;
+                spacing: 0px;
+                Text {
+                    text: root.grade.comment;
+                    font-size: Theme.text-small;
+                    color: Theme.text-2;
+                    wrap: word-wrap;
                 }
             }
-            HorizontalBox {
-                spacing: 8px;
-                // Modifiers
-                Button { text: "+"; width: 30px; clicked => { root.selected-value = root.selected-value + "+"; } }
-                Button { text: "-"; width: 30px; clicked => { root.selected-value = root.selected-value + "-"; } }
+        }
+
+        Button {
+            label: "Zamknij";
+            kind: ButtonKind.secondary;
+            clicked => { root.dismiss(); }
+        }
+    }
+}
+
+// ── Simulate-grade modal ─────────────────────────────────────────────────────
+
+component SimulateModal inherits Rectangle {
+    in property <bool> open: false;
+    in property <string> subject-name;
+    callback dismiss;
+    callback submit(string, float);
+
+    property <string> base: "5";
+    property <int> mod: 0;   // 0 none, 1 plus, 2 minus
+    property <int> weight-index: 1;
+    property <string> value: root.base + (root.mod == 1 ? "+" : root.mod == 2 ? "-" : "");
+    property <float> weight: root.weight-index == 0 ? 0.5 : root.weight-index == 1 ? 1.0 : root.weight-index == 2 ? 2.0 : 3.0;
+
+    Modal {
+        open: root.open;
+        panel-width: 340px;
+        dismiss => { root.dismiss(); }
+
+        VerticalLayout {
+            spacing: 2px;
+            Text {
+                text: "Symulacja oceny";
+                font-size: Theme.text-title;
+                font-weight: 600;
+                color: Theme.text;
             }
-            
-            Text { text: "Waga: " + root.selected-weight; color: Theme.muted-foreground; }
-            Slider {
-                 value: 1.0;
-                 minimum: 0.0;
-                 maximum: 10.0;
-                 changed(v) => { root.selected-weight = floor(v * 2) / 2; } // Step 0.5
+            Text {
+                text: root.subject-name;
+                font-size: Theme.text-small;
+                color: Theme.text-3;
+                wrap: word-wrap;
+            }
+        }
+
+        Divider {}
+
+        // Grade picker
+        VerticalLayout {
+            spacing: Theme.space-2;
+            Text {
+                text: "Ocena";
+                font-size: Theme.text-caption;
+                font-weight: 600;
+                color: Theme.text-3;
+            }
+            HorizontalLayout {
+                spacing: 6px;
+
+                for g in ["1", "2", "3", "4", "5", "6"] : Rectangle {
+                    horizontal-stretch: 1;
+                    height: 34px;
+                    border-radius: Theme.radius-sm;
+                    background: root.base == g ? Theme.accent : ta.has-hover ? Theme.hover : #ffffff0a;
+                    border-width: 1px;
+                    border-color: root.base == g ? Theme.accent : Theme.hairline;
+                    animate background { duration: Theme.motion-fast; }
+                    animate border-color { duration: Theme.motion-fast; }
+
+                    Text {
+                        text: g;
+                        font-size: Theme.text-body;
+                        font-weight: 600;
+                        color: root.base == g ? Theme.on-accent : Theme.text-2;
+                        horizontal-alignment: center;
+                        vertical-alignment: center;
+                    }
+                    ta := TouchArea {
+                        mouse-cursor: pointer;
+                        clicked => { root.base = g; }
+                    }
+                }
             }
 
-            HorizontalBox {
-                alignment: end;
-                Button { text: "Anuluj"; clicked => { root.close(); } }
-                Button { 
-                    text: "Dodaj"; 
-                    primary: true; 
-                    clicked => { root.add(root.selected-value, root.selected-weight); } 
+            // Modifier
+            HorizontalLayout {
+                spacing: 6px;
+                Rectangle { horizontal-stretch: 1; }
+                for m in ["+", "−"] : Rectangle {
+                    width: 40px;
+                    height: 26px;
+                    border-radius: Theme.radius-sm;
+                    background: (m == "+" ? root.mod == 1 : root.mod == 2) ? Theme.accent-soft : ta2.has-hover ? Theme.hover : #ffffff0a;
+                    border-width: 1px;
+                    border-color: (m == "+" ? root.mod == 1 : root.mod == 2) ? Theme.accent.with-alpha(0.5) : Theme.hairline;
+
+                    Text {
+                        text: m;
+                        font-size: Theme.text-small;
+                        font-weight: 600;
+                        color: (m == "+" ? root.mod == 1 : root.mod == 2) ? Theme.accent-text : Theme.text-3;
+                        horizontal-alignment: center;
+                        vertical-alignment: center;
+                    }
+                    ta2 := TouchArea {
+                        mouse-cursor: pointer;
+                        clicked => {
+                            root.mod = (m == "+" ? (root.mod == 1 ? 0 : 1) : (root.mod == 2 ? 0 : 2));
+                        }
+                    }
                 }
+            }
+        }
+
+        // Weight
+        VerticalLayout {
+            spacing: Theme.space-2;
+            Text {
+                text: "Waga oceny";
+                font-size: Theme.text-caption;
+                font-weight: 600;
+                color: Theme.text-3;
+            }
+            Segmented {
+                items: ["0,5", "1", "2", "3"];
+                current: root.weight-index;
+                changed(i) => { root.weight-index = i; }
+            }
+        }
+
+        Divider {}
+
+        HorizontalLayout {
+            spacing: Theme.space-2;
+            Button {
+                label: "Anuluj";
+                kind: ButtonKind.ghost;
+                horizontal-stretch: 1;
+                clicked => { root.dismiss(); }
+            }
+            Button {
+                label: "Dodaj ocenę";
+                kind: ButtonKind.primary;
+                horizontal-stretch: 1;
+                clicked => { root.submit(root.value, root.weight); }
             }
         }
     }
 }
+
+// ── View ─────────────────────────────────────────────────────────────────────
 
 export component GradesView inherits Rectangle {
     in property <[UISubjectGrades]> subjects;
     callback back();
-
-    background: Theme.background;
-    
-    property <bool> overlay-open: false;
-    property <bool> add-grade-open: false;
-    property <UIGrade> selected-grade;
-    property <string> selected-subject;
-    property <int> selected-subject-index;
-    
     callback add-simulated-grade(int, string, float);
 
-    property <int> semester-index: 2;
+    in-out property <int> semester-index: 2;
+    property <bool> detail-open: false;
+    property <bool> simulate-open: false;
+    property <UIGrade> selected-grade;
+    property <string> selected-subject;
+    property <int> selected-subject-index: 0;
 
-    VerticalBox {
-        padding: Theme.padding;
-        spacing: Theme.gap;
+    background: Theme.bg-gradient;
 
-        HorizontalBox {
-            Text {
-                text: "Oceny";
-                font-size: 24px;
-                font-weight: 700;
-                color: Theme.foreground;
-                vertical-alignment: center;
-            }
-            Rectangle { horizontal-stretch: 1; }
-            Button { 
-                text: "Semestr 1"; 
-                primary: root.semester-index == 1;
-                clicked => { root.semester-index = 1; }
-            }
-            Button { 
-                text: "Semestr 2"; 
-                primary: root.semester-index == 2;
-                clicked => { root.semester-index = 2; }
-            }
-        }
+    ScrollView {
+        PageBody {
+            PageHeader {
+                title: "Oceny";
+                subtitle: "Średnie i oceny cząstkowe";
 
-        ScrollView {
-            VerticalBox {
-                spacing: 20px;
-                alignment: start;
-
-                for subject[index] in root.subjects : VerticalBox {
-                    spacing: 8px;
-                    
-                    // Subject Header
-                    HorizontalBox {
-                        property <string> current-avg: root.semester-index == 1 ? subject.average-s1 : subject.average-s2;
-                        
-                        Text {
-                            text: subject.subject_name;
-                            font-weight: 600;
-                            font-size: 16px;
-                            color: Theme.foreground;
-                        }
-                        Rectangle { horizontal-stretch: 1; }
-                        Text {
-                            text: current-avg == "" ? "" : "Średnia: " + current-avg;
-                            color: Theme.muted-foreground;
-                            font-size: 14px;
-                            vertical-alignment: center;
-                        }
-                        
-                        // Add Button
-                        Rectangle { width: 8px; }
-                        Button {
-                            text: "+";
-                            width: 30px;
-                            height: 24px;
-                            clicked => {
-                                root.selected-subject = subject.subject_name;
-                                root.selected-subject-index = index;
-                                root.add-grade-open = true;
-                            }
-                        }
-                    }
-
-                    // Grades Row
-                    ScrollView {
-                        HorizontalBox {
-                            spacing: 8px;
-                            property <[UIGrade]> current-grades: root.semester-index == 1 ? subject.grades-s1 : subject.grades-s2;
-
-                            for grade in current-grades : GradeBadge {
-                                grade: grade;
-                                clicked => { 
-                                    root.selected-grade = grade;
-                                    root.selected-subject = subject.subject_name;
-                                    root.overlay-open = true;
-                                }
-                            }
-                        }
-                    }
-                    
-                    Rectangle { height: 1px; background: Theme.border; }
+                Segmented {
+                    width: 190px;
+                    items: ["Semestr 1", "Semestr 2"];
+                    current: root.semester-index - 1;
+                    changed(i) => { root.semester-index = i + 1; }
                 }
             }
+
+            if root.subjects.length == 0 : Card {
+                height: 180px;
+                VerticalLayout {
+                    alignment: center;
+                    Text {
+                        text: "Brak ocen";
+                        font-size: Theme.text-body-lg;
+                        color: Theme.text-3;
+                        horizontal-alignment: center;
+                    }
+                }
+            }
+
+            if root.subjects.length > 0 : Card {
+                VerticalLayout {
+                    padding-left: Theme.space-4;
+                    padding-right: Theme.space-4;
+                    padding-top: Theme.space-2;
+                    padding-bottom: Theme.space-2;
+                    spacing: Theme.space-2;
+
+                    for subject[idx] in root.subjects : SubjectRow {
+                        subject: subject;
+                        semester: root.semester-index;
+                        last: idx == root.subjects.length - 1;
+                        grade-clicked(grade) => {
+                            root.selected-grade = grade;
+                            root.selected-subject = subject.subject_name;
+                            root.detail-open = true;
+                        }
+                        add-requested => {
+                            root.selected-subject = subject.subject_name;
+                            root.selected-subject-index = idx;
+                            root.simulate-open = true;
+                        }
+                    }
+                }
+            }
+
+            Rectangle { vertical-stretch: 1; min-height: 0px; }
         }
-    }
-    
-    AddGradePopover {
-        open: root.add-grade-open;
-        subject-name: root.selected-subject;
-        add => { 
-            root.add-simulated-grade(root.selected-subject-index, self.selected-value, self.selected-weight);
-            root.add-grade-open = false;
-        }
-        close => { root.add-grade-open = false; }
     }
 
-    DetailPopover {
-        open: root.overlay-open;
+    GradeDetailModal {
+        open: root.detail-open;
         grade: root.selected-grade;
         subject: root.selected-subject;
-        close => { root.overlay-open = false; }
-        width: 100%;
-        height: 100%;
+        dismiss => { root.detail-open = false; }
+    }
+
+    SimulateModal {
+        open: root.simulate-open;
+        subject-name: root.selected-subject;
+        dismiss => { root.simulate-open = false; }
+        submit(value, weight) => {
+            root.add-simulated-grade(root.selected-subject-index, value, weight);
+            root.simulate-open = false;
+        }
     }
 }

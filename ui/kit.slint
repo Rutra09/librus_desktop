@@ -1,0 +1,590 @@
+// ─────────────────────────────────────────────────────────────────────────────
+//  Librus Desktop — UI kit
+//
+//  Every control here is hand-built: the std-widgets default to a Windows
+//  Fluent look that fights the dark surface language. One place to change
+//  how a button, a field or a toggle behaves.
+// ─────────────────────────────────────────────────────────────────────────────
+
+import { ScrollView } from "std-widgets.slint";
+import { IconDisplay, IconSet, Icon as LucideIcon } from "@lucide";
+import { Theme } from "style.slint";
+
+export enum ButtonKind {
+    primary,
+    secondary,
+    ghost,
+    danger,
+}
+
+// ── Icon ─────────────────────────────────────────────────────────────────────
+// Lucide geometry: 24 unit grid, round caps, 1.75 stroke.
+// Inherits Rectangle on purpose: if the component's root were the IconDisplay
+// itself, the `icon`/`size` declarations below would alias its own properties
+// and `icon: root.icon` would be a self-binding that recurses forever.
+
+export component Icon inherits Rectangle {
+    in property <LucideIcon> icon;
+    in property <length> size: 16px;
+    in property <color> tint: Theme.text-2;
+    in property <float> weight: 1.75;
+
+    width: root.size;
+    height: root.size;
+    background: transparent;
+
+    // The glyph is centred inside the box, so a call site can stretch the box to
+    // fill a taller container (a 32 px nav row, a 30 px icon button) and the
+    // strokes still land on the label's optical centre. Rectangle has no
+    // alignment property — that only exists on layouts — hence the manual x/y.
+    IconDisplay {
+        icon: root.icon;
+        size: root.size;
+        stroke: root.tint;
+        stroke-width: root.weight;
+        x: (root.width - self.width) / 2;
+        y: (root.height - self.height) / 2;
+    }
+}
+
+// ── Button ───────────────────────────────────────────────────────────────────
+
+export component Button inherits Rectangle {
+    in property <string> label;
+    in property <ButtonKind> kind: ButtonKind.secondary;
+    in property <bool> small: false;
+    in property <bool> large: false;
+    in property <bool> enabled: true;
+    in property <bool> with-icon: false;
+    in property <LucideIcon> icon;
+    callback clicked;
+
+    height: root.large ? 36px : root.small ? 28px : 32px;
+    border-radius: Theme.radius;
+    opacity: root.enabled ? 1.0 : 0.4;
+
+    background: root.kind == ButtonKind.primary
+        ? (ta.pressed ? Theme.accent.mix(black, 0.16) : ta.has-hover ? Theme.accent.mix(white, 0.12) : Theme.accent)
+        : root.kind == ButtonKind.danger
+        ? (ta.pressed ? Theme.danger.with-alpha(0.22) : ta.has-hover ? Theme.danger.with-alpha(0.12) : transparent)
+        : root.kind == ButtonKind.ghost
+        ? (ta.pressed ? Theme.pressed : ta.has-hover ? Theme.hover : transparent)
+        : (ta.pressed ? Theme.selected : ta.has-hover ? Theme.hover.mix(white, 0.04) : Theme.hover);
+
+    animate background { duration: Theme.motion-fast; easing: Theme.ease-standard; }
+
+    property <color> ink: root.kind == ButtonKind.primary
+        ? Theme.on-accent
+        : root.kind == ButtonKind.danger ? Theme.danger : Theme.text;
+
+    transform-scale: ta.pressed && root.enabled ? 0.97 : 1.0;
+    animate transform-scale { duration: Theme.motion-fast; easing: Theme.ease-out-strong; }
+
+    HorizontalLayout {
+        padding-left: root.small ? Theme.space-3 : 14px;
+        padding-right: root.small ? Theme.space-3 : 14px;
+        spacing: Theme.space-2;
+        alignment: center;
+
+        if root.with-icon : Icon {
+            icon: root.icon;
+            size: 14px;
+            height: root.height;
+            tint: root.ink;
+            weight: 1.75;
+        }
+        Text {
+            text: root.label;
+            font-size: root.small ? Theme.text-small : Theme.text-body;
+            font-weight: 600;
+            color: root.ink;
+            vertical-alignment: center;
+        }
+    }
+
+    ta := TouchArea {
+        enabled: root.enabled;
+        mouse-cursor: root.enabled ? pointer : default;
+        clicked => { root.clicked(); }
+    }
+}
+
+// ── IconButton ───────────────────────────────────────────────────────────────
+
+export component IconButton inherits Rectangle {
+    in property <LucideIcon> icon;
+    in property <length> size: 30px;
+    in property <length> icon-size: 16px;
+    in property <bool> active: false;
+    in property <string> tip;
+    callback clicked;
+
+    width: root.size;
+    height: root.size;
+    border-radius: Theme.radius-sm;
+    background: root.active ? Theme.selected : ta.pressed ? Theme.pressed : ta.has-hover ? Theme.hover : transparent;
+    animate background { duration: Theme.motion-fast; easing: Theme.ease-standard; }
+
+    transform-scale: ta.pressed ? 0.94 : 1.0;
+    animate transform-scale { duration: Theme.motion-fast; easing: Theme.ease-out-strong; }
+
+    Icon {
+        icon: root.icon;
+        size: root.icon-size;
+        width: root.size;
+        height: root.size;
+        tint: root.active ? Theme.text : Theme.text-2;
+        weight: 1.75;
+    }
+
+    ta := TouchArea {
+        mouse-cursor: pointer;
+        clicked => { root.clicked(); }
+    }
+}
+
+// ── TextField ────────────────────────────────────────────────────────────────
+
+export component TextField {
+    in-out property <string> text;
+    in property <string> placeholder;
+    in property <string> label;
+    in property <bool> password: false;
+    in property <bool> enabled: true;
+    callback edited(string);
+    callback accepted();
+
+    VerticalLayout {
+        spacing: Theme.space-2;
+
+        if root.label != "" : Text {
+            text: root.label;
+            font-size: Theme.text-small;
+            font-weight: 600;
+            color: Theme.text-2;
+        }
+
+        Rectangle {
+            height: 32px;
+            border-radius: Theme.radius;
+            background: #ffffff12;
+            border-width: 1px;
+            border-color: input.has-focus ? Theme.accent.with-alpha(0.7) : Theme.hairline-strong;
+            animate border-color { duration: Theme.motion-fast; easing: Theme.ease-standard; }
+            opacity: root.enabled ? 1.0 : 0.45;
+
+            // Slint's TextInput has no placeholder support, so it is drawn first
+            if root.text == "" && root.placeholder != "" : Text {
+                x: Theme.space-3;
+                width: parent.width - Theme.space-3 * 2;
+                height: parent.height;
+                text: root.placeholder;
+                font-size: Theme.text-body;
+                color: Theme.text-4;
+                vertical-alignment: center;
+                overflow: elide;
+            }
+
+            input := TextInput {
+                x: Theme.space-3;
+                width: parent.width - Theme.space-3 * 2;
+                height: parent.height;
+                vertical-alignment: center;
+                font-size: Theme.text-body;
+                color: Theme.text;
+                single-line: true;
+                enabled: root.enabled;
+                input-type: root.password ? InputType.password : InputType.text;
+                edited => { root.edited(self.text); }
+                accepted => { root.accepted(); }
+                text <=> root.text;
+            }
+        }
+    }
+}
+
+// ── Toggle ───────────────────────────────────────────────────────────────────
+
+export component Toggle inherits Rectangle {
+    in-out property <bool> checked;
+    in property <bool> enabled: true;
+    callback toggled(bool);
+
+    width: 38px;
+    height: 22px;
+    opacity: root.enabled ? 1.0 : 0.4;
+
+    Rectangle {
+        width: parent.width;
+        height: parent.height;
+        border-radius: parent.height / 2;
+        background: root.checked ? Theme.accent : #ffffff29;
+        animate background { duration: Theme.motion; easing: Theme.ease-standard; }
+
+        Rectangle {
+            width: 18px;
+            height: 18px;
+            y: 2px;
+            x: root.checked ? parent.width - 20px : 2px;
+            border-radius: 9px;
+            background: white;
+            drop-shadow-blur: 3px;
+            drop-shadow-offset-y: 1px;
+            drop-shadow-color: #00000055;
+            animate x { duration: Theme.motion; easing: Theme.ease-out-strong; }
+        }
+    }
+
+    ta := TouchArea {
+        enabled: root.enabled;
+        mouse-cursor: root.enabled ? pointer : default;
+        clicked => {
+            root.checked = !root.checked;
+            root.toggled(root.checked);
+        }
+    }
+}
+
+// ── Segmented ────────────────────────────────────────────────────────────────
+// Equal-width segments with a pill that slides between them.
+
+export component Segmented inherits Rectangle {
+    in-out property <int> current: 0;
+    in property <[string]> items;
+    callback changed(int);
+
+    height: 32px;
+    border-radius: Theme.radius;
+    background: #ffffff12;
+
+    // Fixed segment height on purpose: `height: 100%` inside a layout whose
+    // own height comes from its children is circular and made the parent
+    // report a garbage preferred height.
+    property <length> seg-height: 28px;
+    property <length> seg-width: root.items.length > 0 ? (root.width - 4px) / root.items.length : 0px;
+
+    Rectangle {
+        x: 2px + root.current * root.seg-width;
+        y: 2px;
+        width: root.seg-width;
+        height: root.seg-height;
+        border-radius: 6px;
+        background: Theme.surface-active;
+        drop-shadow-blur: 4px;
+        drop-shadow-offset-y: 1px;
+        drop-shadow-color: #00000030;
+        animate x { duration: 220ms; easing: Theme.ease-out-strong; }
+    }
+
+    HorizontalLayout {
+        padding: 2px;
+        spacing: 0px;
+
+        for item[idx] in root.items : Rectangle {
+            horizontal-stretch: 1;
+            height: root.seg-height;
+
+            Text {
+                text: item;
+                font-size: Theme.text-small;
+                font-weight: idx == root.current ? 600 : 500;
+                color: idx == root.current ? Theme.text : Theme.text-2;
+                horizontal-alignment: center;
+                vertical-alignment: center;
+                animate color { duration: Theme.motion; easing: Theme.ease-standard; }
+            }
+
+            TouchArea {
+                mouse-cursor: pointer;
+                clicked => {
+                    if root.current != idx {
+                        root.current = idx;
+                        root.changed(idx);
+                    }
+                }
+            }
+        }
+    }
+}
+
+// ── Card ─────────────────────────────────────────────────────────────────────
+
+export component Card inherits Rectangle {
+    in property <length> pad: Theme.space-4;
+    background: Theme.surface;
+    border-radius: Theme.radius-lg;
+    border-width: 1px;
+    border-color: Theme.hairline-strong;
+    @children
+}
+
+// ── Section header inside a card ─────────────────────────────────────────────
+
+export component CardTitle {
+    in property <string> title;
+    in property <string> meta;
+    in property <LucideIcon> icon;
+    in property <bool> with-icon: false;
+    in property <color> tone: Theme.text-2;
+
+    HorizontalLayout {
+        spacing: Theme.space-2;
+        alignment: start;
+        height: 20px;
+
+        if root.with-icon : Icon {
+            icon: root.icon;
+            size: 15px;
+            tint: root.tone;
+            weight: 1.75;
+        }
+        Text {
+            text: root.title;
+            font-size: Theme.text-title;
+            font-weight: 600;
+            color: Theme.text;
+            vertical-alignment: center;
+        }
+        Rectangle { horizontal-stretch: 1; }
+        if root.meta != "" : Text {
+            text: root.meta;
+            font-size: Theme.text-small;
+            color: Theme.text-3;
+            vertical-alignment: center;
+        }
+    }
+}
+
+// ── Divider ──────────────────────────────────────────────────────────────────
+
+export component Divider inherits Rectangle {
+    height: 1px;
+    background: Theme.hairline;
+}
+
+// ── Badge ────────────────────────────────────────────────────────────────────
+
+export component Badge inherits Rectangle {
+    in property <string> label;
+    in property <color> tone: Theme.text-2;
+    in property <bool> filled: false;
+
+    height: 20px;
+    border-radius: Theme.radius-sm;
+    background: root.filled ? root.tone : root.tone.with-alpha(0.14);
+
+    HorizontalLayout {
+        padding-left: 7px;
+        padding-right: 7px;
+        alignment: center;
+        Text {
+            text: root.label;
+            font-size: Theme.text-caption;
+            font-weight: 600;
+            color: root.filled ? #ffffff : root.tone;
+            vertical-alignment: center;
+        }
+    }
+}
+
+// ── PageHeader ───────────────────────────────────────────────────────────────
+
+export component PageHeader {
+    in property <string> title;
+    in property <string> subtitle;
+    in property <bool> show-back: false;
+    callback back();
+
+    HorizontalLayout {
+        spacing: Theme.space-3;
+        height: 34px;
+
+        if root.show-back : IconButton {
+            icon: IconSet.ArrowLeft;
+            size: 30px;
+            clicked => { root.back(); }
+        }
+
+        VerticalLayout {
+            spacing: 1px;
+            alignment: center;
+
+            Text {
+                text: root.title;
+                font-size: Theme.text-large;
+                font-weight: 600;
+                color: Theme.text;
+                vertical-alignment: center;
+            }
+            if root.subtitle != "" : Text {
+                text: root.subtitle;
+                font-size: Theme.text-small;
+                color: Theme.text-3;
+            }
+        }
+
+        Rectangle { horizontal-stretch: 1; }
+        @children
+    }
+}
+
+// ── PageBody ─────────────────────────────────────────────────────────────────
+// Padding must stay constant: inside a ScrollView the content width is derived
+// from its own preferred width, so a width-dependent padding is a binding loop.
+
+export component PageBody inherits VerticalLayout {
+    in property <length> pad: Theme.page-padding;
+
+    // A ScrollView does not stretch its content, so the body takes the full
+    // viewport width explicitly instead of shrink-wrapping to its widest child.
+    width: 100%;
+
+    padding-left: root.pad;
+    padding-right: root.pad;
+    padding-top: Theme.space-5;
+    padding-bottom: Theme.space-8;
+    spacing: Theme.space-5;
+    alignment: start;
+    @children
+}
+
+// ── PageColumn ───────────────────────────────────────────────────────────────
+// Fixed-width column centred by two stretching spacers. Use inside PageBody
+// for form-heavy pages that would otherwise stretch across an ultrawide window.
+
+export component PageColumn inherits HorizontalLayout {
+    in property <length> width-px: 760px;
+
+    Rectangle { horizontal-stretch: 1; }
+    VerticalLayout {
+        width: root.width-px;
+        spacing: Theme.space-5;
+        alignment: start;
+        @children
+    }
+    Rectangle { horizontal-stretch: 1; }
+}
+
+// ── EmptyState ───────────────────────────────────────────────────────────────
+
+export component EmptyState {
+    in property <LucideIcon> icon;
+    in property <string> title;
+    in property <string> message;
+
+    VerticalLayout {
+        spacing: Theme.space-2;
+        alignment: center;
+
+        Rectangle {
+            width: 44px;
+            height: 44px;
+            border-radius: 22px;
+            background: Theme.hover;
+
+            Icon {
+                icon: root.icon;
+                size: 20px;
+                tint: Theme.text-3;
+                y: (parent.height - self.height) / 2;
+                x: (parent.width - self.width) / 2;
+            }
+        }
+        Text {
+            text: root.title;
+            font-size: Theme.text-body-lg;
+            font-weight: 600;
+            color: Theme.text-2;
+            horizontal-alignment: center;
+        }
+        Text {
+            text: root.message;
+            font-size: Theme.text-small;
+            color: Theme.text-3;
+            horizontal-alignment: center;
+            wrap: word-wrap;
+        }
+    }
+}
+
+// ── Meter ────────────────────────────────────────────────────────────────────
+
+export component Meter inherits Rectangle {
+    in property <float> value: 0.0;   // 0..1
+    in property <color> tone: Theme.accent;
+    in property <length> thickness: 5px;
+
+    height: root.thickness;
+    border-radius: root.thickness / 2;
+    background: #ffffff14;
+
+    Rectangle {
+        width: parent.width * root.value;
+        height: parent.height;
+        border-radius: root.thickness / 2;
+        background: root.tone;
+        animate width { duration: 420ms; easing: Theme.ease-out-strong; }
+    }
+}
+
+// ── Modal ────────────────────────────────────────────────────────────────────
+// Backdrop is opaque enough to read as a layer, and the panel enters from
+// scale 0.96 rather than 0 — nothing appears out of nothing.
+
+export component Modal inherits Rectangle {
+    in property <bool> open: false;
+    in property <length> panel-width: 340px;
+    in property <length> panel-height: 0px;  // 0 = fit content
+    callback dismiss;
+
+    width: 100%;
+    height: 100%;
+
+    Rectangle {
+        width: 100%;
+        height: 100%;
+        background: #00000099;
+        opacity: root.open ? 1.0 : 0.0;
+        animate opacity { duration: Theme.motion; easing: Theme.ease-standard; }
+    }
+
+    ta := TouchArea {
+        width: 100%;
+        height: 100%;
+        enabled: root.open;
+        clicked => { root.dismiss(); }
+    }
+
+    Rectangle {
+        width: root.panel-width;
+        height: root.panel-height > 0px ? root.panel-height : content.preferred-height;
+        x: (parent.width - self.width) / 2;
+        y: (parent.height - self.height) / 2;
+        background: Theme.popover;
+        border-radius: Theme.radius-2xl;
+        border-width: 1px;
+        border-color: Theme.hairline-strong;
+        drop-shadow-blur: 40px;
+        drop-shadow-offset-y: 12px;
+        drop-shadow-color: #00000099;
+
+        opacity: root.open ? 1.0 : 0.0;
+        transform-scale: root.open ? 1.0 : 0.96;
+        animate opacity { duration: Theme.motion; easing: Theme.ease-standard; }
+        animate transform-scale { duration: Theme.motion; easing: Theme.ease-out-strong; }
+
+        // Swallow clicks on the panel body so they don't reach the backdrop.
+        // Declared before the content so the content's controls stay on top.
+        TouchArea {}
+
+        content := VerticalLayout {
+            width: parent.width;
+            padding: Theme.space-5;
+            spacing: Theme.space-4;
+            @children
+        }
+
+        // While closed the panel is invisible but still laid out; block input.
+        if !root.open : TouchArea {}
+    }
+}

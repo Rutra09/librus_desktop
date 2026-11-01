@@ -1,8 +1,9 @@
-import { VerticalBox, HorizontalBox, Button, ScrollView } from "std-widgets.slint";
+import { ScrollView } from "std-widgets.slint";
 import { Theme } from "style.slint";
-import { IconDisplay, IconSet } from "@lucide";
+import { Icon, IconButton, Button, ButtonKind, Divider, PageBody, PageHeader, Modal } from "kit.slint";
+import { IconSet } from "@lucide";
 
-// ── Data model ──────────────────────────────────────────────────────────
+// ── Data model ──────────────────────────────────────────────────────────────
 
 export struct UIGridCell {
     has-lesson: bool,
@@ -46,377 +47,383 @@ export struct UIDay {
     lessons: [UILesson],
 }
 
-// ── Popover ─────────────────────────────────────────────────────────────
-
-component LessonPopover inherits Rectangle {
-    in property <bool> open;
-    in property <UIGridCell> cell;
-    callback close;
-    visible: open;
-
-    TouchArea { width: 100%; height: 100%; clicked => { root.close(); } }
-    Rectangle { background: #00000080; width: 100%; height: 100%; }
-
-    Rectangle {
-        width: 380px;
-        height: 420px;
-        background: Theme.popover;
-        border-radius: 12px;
-        border-width: 1px;
-        border-color: Theme.border;
-        x: (parent.width - self.width) / 2;
-        y: (parent.height - self.height) / 2;
-        opacity: open ? 1.0 : 0.0;
-        animate opacity { duration: 200ms; easing: ease-out; }
-
-        VerticalBox {
-            padding: 20px;
-            spacing: 12px;
-            alignment: start;
-
-            Text { text: "Szczegóły lekcji"; font-size: 12px; color: Theme.muted-foreground; }
-
-            TextInput {
-                text: root.cell.subject;
-                font-size: 22px;
-                color: Theme.foreground;
-                wrap: word-wrap;
-                read-only: true;
-            }
-
-            if root.cell.lesson-type == 1 || root.cell.lesson-type == 3 : Rectangle {
-                background: #991b1b; border-radius: 6px; height: 26px; vertical-stretch: 0;
-                HorizontalLayout {
-                    spacing: 4px; alignment: center; padding-left: 8px; padding-right: 8px;
-                    Rectangle { 
-                        width: 14px; 
-                        IconDisplay { icon: root.cell.lesson-type == 1 ? IconSet.Ban : IconSet.ArrowRightLeft; size: 14px; stroke-width: 2.3; stroke: #fca5a5; y: (parent.height - self.height) / 2; }
-                    }
-                    Text {
-                        text: root.cell.lesson-type == 1 ? "Odwołane" : "Przeniesione (źródło)";
-                        font-size: 11px; font-weight: 600; color: #fca5a5;
-                        vertical-alignment: center;
-                    }
-                }
-            }
-
-            if root.cell.lesson-type == 2 || root.cell.lesson-type == 4 : Rectangle {
-                background: #92400e; border-radius: 6px; height: 26px; vertical-stretch: 0;
-                HorizontalLayout {
-                    spacing: 4px; alignment: center; padding-left: 8px; padding-right: 8px;
-                    Rectangle { 
-                        width: 14px;
-                        IconDisplay { icon: root.cell.lesson-type == 2 ? IconSet.UserRoundPen : IconSet.ArrowRightLeft; size: 14px; stroke-width: 2.3; stroke: #fcd34d; y: (parent.height - self.height) / 2;}
-                    }
-                    Text {
-                        text: root.cell.lesson-type == 2 ? "Zastępstwo" : "Przeniesione (cel)";
-                        font-size: 11px; font-weight: 600; color: #fcd34d;
-                        vertical-alignment: center;
-                    }
-                }
-            }
-
-            if root.cell.change-info != "" : TextInput {
-                text: root.cell.change-info;
-                font-size: 12px; color: Theme.muted-foreground; wrap: word-wrap;
-                read-only: true;
-            }
-
-            if root.cell.event-content != "" : Rectangle {
-                background: #1e3a5f; border-radius: 8px;
-                height: evt-lay.preferred-height + 16px; vertical-stretch: 0;
-                evt-lay := VerticalBox {
-                    padding: 10px; spacing: 4px;
-                    Text { text: root.cell.event-category != "" ? root.cell.event-category : "Wydarzenie"; font-weight: 600; font-size: 11px; color: #93c5fd; }
-                    TextInput { text: root.cell.event-content; color: Theme.foreground; font-size: 13px; wrap: word-wrap; read-only: true; }
-                }
-            }
-
-            Rectangle { height: 1px; background: Theme.border; vertical-stretch: 0; }
-
-            VerticalBox {
-                spacing: 6px; padding: 0px;
-                Text { text: root.cell.hour-from + " – " + root.cell.hour-to; color: Theme.muted-foreground; font-size: 13px; }
-                Text { text: "Nauczyciel: " + root.cell.teacher; color: Theme.muted-foreground; font-size: 13px; wrap: word-wrap; }
-                Text { text: "Sala: " + root.cell.room; color: Theme.muted-foreground; font-size: 13px; }
-            }
-
-            Rectangle { vertical-stretch: 1; }
-            Button { text: "Zamknij"; clicked => { root.close(); } }
-        }
-    }
-}
-
-// ── Grid Cell ───────────────────────────────────────────────────────────
+// ── Cell ────────────────────────────────────────────────────────────────────
 
 component GridCell inherits Rectangle {
     in property <UIGridCell> cell;
     in property <bool> is-today: false;
     callback clicked;
 
-    // Height naturally flows from parent's HorizontalBox stretch 
-    border-width: 0px;
+    property <bool> cancelled: cell.lesson-type == 1 || cell.lesson-type == 3;
+    property <bool> changed: cell.lesson-type == 2 || cell.lesson-type == 4;
 
+    border-radius: Theme.radius;
+    clip: true;
+    // A layout will not shrink an item below its content's minimum width, and a
+    // single-line subject name was pushing column one ~80 px wider than the rest.
+    // The width is owned by the grid (col-width), so the content must not vote.
+    min-width: 0px;
     background: !cell.has-lesson
-        ? (is-today ? #ffffff08 : Theme.background)
-        : cell.lesson-type == 1 ? #7f1d1d28
-        : cell.lesson-type == 3 ? #7f1d1d28
-        : cell.lesson-type == 2 ? #854d0e28
-        : cell.lesson-type == 4 ? #854d0e28
-        : (is-today ? #ffffff0c : Theme.card);
+        ? (is-today ? #ffffff08 : transparent)
+        : root.cancelled
+        ? Theme.danger.with-alpha(0.08)
+        : root.changed
+        ? Theme.warning.with-alpha(0.08)
+        : ta.has-hover ? Theme.surface-hover : Theme.surface;
 
-    ta := TouchArea {
-        enabled: cell.has-lesson;
-        clicked => { root.clicked(); }
-        mouse-cursor: cell.has-lesson ? pointer : default;
+    animate background { duration: Theme.motion-fast; easing: Theme.ease-standard; }
+
+    // Left rule marks the block without colouring the whole cell
+    if cell.has-lesson : Rectangle {
+        x: 0px;
+        y: 10px;
+        width: 2px;
+        height: parent.height - 20px;
+        border-radius: 1px;
+        background: root.cancelled ? Theme.danger.with-alpha(0.7)
+            : root.changed ? Theme.warning.with-alpha(0.7)
+            : Theme.accent.with-alpha(0.55);
     }
 
-    Rectangle {
-        visible: ta.has-hover && cell.has-lesson;
-        background: #ffffff0a;
-    }
-
-    // Unconditional block ensures background stretches properly 
-    VerticalBox {
+    VerticalLayout {
         visible: cell.has-lesson;
         padding-left: 10px;
-        padding-right: 10px;
-        padding-top: 6px;
-        padding-bottom: 6px;
+        padding-right: 8px;
+        padding-top: 7px;
+        padding-bottom: 7px;
         spacing: 2px;
         alignment: start;
 
-        // Status badge
-        if cell.lesson-type == 1 || cell.lesson-type == 3 : HorizontalBox {
-            spacing: 0px; vertical-stretch: 0; alignment: start;
-            Rectangle {
-                background: #991b1b;
-                border-radius: 3px;
-                height: 16px;
-                width: badge-txt.preferred-width + 12px;
-                vertical-stretch: 0;
-                badge-txt := Text {
-                    text: cell.lesson-type == 1 ? "odwołane" : "przeniesione";
-                    font-size: 9px; font-weight: 700; color: #fca5a5;
-                    horizontal-alignment: center; vertical-alignment: center;
-                }
-            }
+        if root.cancelled : Text {
+            text: cell.lesson-type == 1 ? "Odwołane" : "Przeniesione";
+            font-size: Theme.text-caption;
+            font-weight: 600;
+            color: Theme.danger;
+            letter-spacing: 0.3px;
+        }
+        if root.changed : Text {
+            text: cell.lesson-type == 2 ? "Zastępstwo" : "Przeniesione";
+            font-size: Theme.text-caption;
+            font-weight: 600;
+            color: Theme.warning;
+            letter-spacing: 0.3px;
         }
 
-        // Subject - allow wrapping so row scales
         Text {
             text: cell.subject;
-            font-weight: 700;
-            font-size: 13px;
-            color: (cell.lesson-type == 1 || cell.lesson-type == 3) ? #777 : Theme.foreground;
+            font-weight: 600;
+            font-size: Theme.text-small;
+            color: root.cancelled ? Theme.text-3 : Theme.text;
             wrap: word-wrap;
+            overflow: elide;
         }
 
-        // Teacher - allow wrapping
         Text {
             text: cell.teacher;
-            font-size: 10px;
-            color: #777;
-            wrap: word-wrap;
+            font-size: Theme.text-caption;
+            color: Theme.text-3;
+            overflow: elide;
         }
 
-        // Room tag
-        if cell.room != "" && cell.room != "-" : HorizontalBox {
-            spacing: 0px; vertical-stretch: 0; alignment: start;
-            Rectangle {
-                background: #ffffff10;
-                border-radius: 3px;
-                height: 17px;
-                width: room-t.preferred-width + 12px;
-                vertical-stretch: 0;
-                room-t := Text {
-                    text: "s. " + cell.room;
-                    font-size: 9px; font-weight: 500; color: #999;
-                    horizontal-alignment: center; vertical-alignment: center;
-                }
-            }
-        }
+        HorizontalLayout {
+            spacing: 6px;
+            alignment: start;
+            height: 13px;
 
-        // Change info - allow wrapping
-        if cell.change-info != "" : HorizontalBox {
-            padding: 0px; spacing: 4px; alignment: start;
-            Rectangle {
-                width: 10px;
-                IconDisplay { icon: IconSet.CornerDownRight; size: 10px; stroke-width: 2.0; stroke: (cell.lesson-type == 2 || cell.lesson-type == 4) ? #fbbf24 : #f87171; y: 2px;}
+            if cell.room != "" && cell.room != "-" : Text {
+                text: "s. " + cell.room;
+                font-size: Theme.text-caption;
+                font-weight: 500;
+                color: Theme.text-3;
+                vertical-alignment: center;
             }
-            Text {
+            if cell.change-info != "" : Text {
                 text: cell.change-info;
-                font-size: 9px;
-                color: (cell.lesson-type == 2 || cell.lesson-type == 4) ? #fbbf24 : #f87171;
-                wrap: word-wrap;
+                font-size: Theme.text-caption;
+                color: root.changed ? Theme.warning : Theme.danger;
+                vertical-alignment: center;
+                overflow: elide;
+                horizontal-stretch: 1;
+            }
+            Rectangle { horizontal-stretch: 1; }
+            if cell.event-content != "" : Rectangle {
+                width: 6px;
+                height: 6px;
+                border-radius: 3px;
+                background: Theme.accent;
+                y: (parent.height - self.height) / 2;
             }
         }
+    }
 
-        // Event indicator
-        if cell.event-content != "" : HorizontalBox {
-            spacing: 0px; vertical-stretch: 0; alignment: start;
-            Rectangle {
-                background: #2563eb;
-                border-radius: 3px;
-                height: 14px; width: 14px; vertical-stretch: 0;
-                Text { text: "!"; color: white; font-weight: 700; font-size: 9px; horizontal-alignment: center; vertical-alignment: center; }
-            }
+    ta := TouchArea {
+        enabled: cell.has-lesson;
+        mouse-cursor: cell.has-lesson ? pointer : default;
+        clicked => { root.clicked(); }
+    }
+}
+
+component MetaRow {
+    in property <string> label;
+    in property <string> value;
+
+    HorizontalLayout {
+        spacing: Theme.space-3;
+        alignment: start;
+
+        Text {
+            text: root.label;
+            font-size: Theme.text-small;
+            color: Theme.text-3;
+            width: 84px;
+        }
+        Text {
+            text: root.value;
+            font-size: Theme.text-small;
+            color: Theme.text;
+            wrap: word-wrap;
+            horizontal-stretch: 1;
         }
     }
 }
 
-// ── Main View ───────────────────────────────────────────────────────────
+// ── Lesson modal ────────────────────────────────────────────────────────────
 
-export component TimetableView inherits Rectangle {
-    in property <[UIGridRow]> grid-rows;
-    in property <[string]> day-headers;
-    in property <string> week-range: "Ładowanie...";
-    in property <int> today-col-index: -1;
-    callback prev-week();
-    callback next-week();
+component LessonModal inherits Rectangle {
+    in property <bool> open: false;
+    in property <UIGridCell> cell;
+    callback dismiss;
 
-    background: Theme.background;
+    property <bool> cancelled: root.cell.lesson-type == 1 || root.cell.lesson-type == 3;
+    property <bool> changed: root.cell.lesson-type == 2 || root.cell.lesson-type == 4;
+    property <string> status-label: root.cancelled ? (root.cell.lesson-type == 1 ? "Lekcja odwołana" : "Lekcja przeniesiona") : (root.cell.lesson-type == 2 ? "Zastępstwo" : "Lekcja przeniesiona");
 
-    property <bool> overlay-open: false;
-    property <UIGridCell> selected-cell;
+    Modal {
+        open: root.open;
+        panel-width: 340px;
+        dismiss => { root.dismiss(); }
 
-    property <length> nr-col-width: 24px;
-    property <length> hour-col-width: 52px;
-    property <length> day-col-width: (root.width - nr-col-width - hour-col-width) / max(1, root.day-headers.length);
+        VerticalLayout {
+            spacing: Theme.space-2;
 
-    VerticalBox {
-        padding: 0px;
-        spacing: 0px;
+            if root.cancelled || root.changed : Rectangle {
+                background: root.cancelled ? Theme.danger.with-alpha(0.12) : Theme.warning.with-alpha(0.12);
+                border-radius: Theme.radius-sm;
+                width: self.preferred-width;
 
-        // Week navigation
-        HorizontalBox {
-            alignment: center;
-            spacing: 8px;
-            vertical-stretch: 0;
-            height: 36px;
-            Rectangle {
-                width: 36px; height: 24px;
-                background: ta1.pressed ? Theme.secondary : transparent;
-                border-radius: Theme.radius;
-                ta1 := TouchArea {
-                    clicked => { root.prev-week(); }
-                    HorizontalBox {
-                        alignment: center; vertical-stretch: 1; horizontal-stretch: 1; padding: 0px; spacing: 0px;
-                        IconDisplay { icon: IconSet.ChevronLeft; size: 16px; stroke-width: 2.3; stroke: Theme.foreground; }
+                HorizontalLayout {
+                    padding-left: 8px;
+                    padding-right: 8px;
+                    height: 22px;
+                    spacing: 5px;
+                    alignment: start;
+
+                    Icon {
+                        icon: root.cancelled ? IconSet.Ban : IconSet.ArrowRightLeft;
+                        size: 12px;
+                        tint: root.cancelled ? Theme.danger : Theme.warning;
+                        weight: 1.75;
+                        y: (parent.height - self.height) / 2;
+                    }
+                    Text {
+                        text: root.status-label;
+                        font-size: Theme.text-caption;
+                        font-weight: 600;
+                        color: root.cancelled ? Theme.danger : Theme.warning;
+                        vertical-alignment: center;
                     }
                 }
             }
+
             Text {
-                text: root.week-range;
-                font-size: 16px;
+                text: root.cell.subject;
+                font-size: Theme.text-title;
                 font-weight: 600;
-                color: Theme.foreground;
-                vertical-alignment: center;
+                color: Theme.text;
+                wrap: word-wrap;
             }
-            Rectangle {
-                width: 36px; height: 24px;
-                background: ta2.pressed ? Theme.secondary : transparent;
-                border-radius: Theme.radius;
-                ta2 := TouchArea {
-                    clicked => { root.next-week(); }
-                    HorizontalBox {
-                        alignment: center; vertical-stretch: 1; horizontal-stretch: 1; padding: 0px; spacing: 0px;
-                        IconDisplay { icon: IconSet.ChevronRight; size: 16px; stroke-width: 2.3; stroke: Theme.foreground; }
-                    }
+        }
+
+        Divider {}
+
+        VerticalLayout {
+            spacing: Theme.space-2;
+
+            MetaRow { label: "Godzina"; value: root.cell.hour-from + " – " + root.cell.hour-to; }
+            if root.cell.teacher != "" : MetaRow { label: "Nauczyciel"; value: root.cell.teacher; }
+            if root.cell.room != "" : MetaRow { label: "Sala"; value: root.cell.room; }
+            if root.cell.change-info != "" : MetaRow { label: "Zmiana"; value: root.cell.change-info; }
+        }
+
+        if root.cell.event-content != "" : Rectangle {
+            background: Theme.accent.with-alpha(0.08);
+            border-radius: Theme.radius;
+            border-width: 1px;
+            border-color: Theme.accent.with-alpha(0.18);
+
+            VerticalLayout {
+                padding: Theme.space-3;
+                spacing: 2px;
+                Text {
+                    text: root.cell.event-category != "" ? root.cell.event-category : "Wydarzenie";
+                    font-size: Theme.text-caption;
+                    font-weight: 600;
+                    color: Theme.accent-text;
+                }
+                Text {
+                    text: root.cell.event-content;
+                    font-size: Theme.text-small;
+                    color: Theme.text-2;
+                    wrap: word-wrap;
                 }
             }
         }
 
-        // Grid
-        ScrollView {
-            VerticalBox {
-                spacing: 0px;
-                padding: 0px;
-                alignment: start;
+        Button {
+            label: "Zamknij";
+            kind: ButtonKind.secondary;
+            clicked => { root.dismiss(); }
+        }
+    }
+}
 
-                // Header row
-                HorizontalBox {
-                    spacing: 0px;
-                    padding: 0px;
-                    vertical-stretch: 0;
+// ── View ────────────────────────────────────────────────────────────────────
 
-                    Rectangle {
-                        width: nr-col-width; height: 26px;
-                        background: Theme.muted; border-width: 0px;
-                        horizontal-stretch: 0;
-                        Text { text: "Nr"; font-size: 10px; font-weight: 600; color: Theme.muted-foreground; horizontal-alignment: center; vertical-alignment: center; }
+export component TimetableView inherits Rectangle {
+    in property <[UIGridRow]> grid-rows;
+    in property <[string]> day-headers;
+    in property <string> week-range: "Ładowanie…";
+    in property <int> today-col-index: -1;
+    callback prev-week();
+    callback next-week();
+
+    background: Theme.bg-gradient;
+
+    property <bool> overlay-open: false;
+    property <UIGridCell> selected-cell;
+
+    // Fixed grid geometry. Every row used to distribute the width among its own
+    // cells, so a column was as wide as its longest subject name and no two
+    // rows lined up. One column width, computed once, for the whole grid.
+    property <int> cols: root.day-headers.length;
+    property <length> gutter-no: 24px;
+    property <length> gutter-hours: 52px;
+    property <length> grid-gap: 4px;
+    property <length> col-width: root.cols > 0
+        ? max(72px, (root.width - Theme.page-padding * 2 - root.scrollbar-allowance - root.gutter-no - root.gutter-hours - root.grid-gap * (root.cols + 1)) / root.cols)
+        : 0px;
+    // The grid lives inside a ScrollView whose viewport is narrower than the
+    // page by the scrollbar, so the column maths has to leave room for it.
+    property <length> scrollbar-allowance: 16px;
+
+    ScrollView {
+        PageBody {
+            PageHeader {
+                title: "Plan zajęć";
+                subtitle: root.week-range;
+
+                HorizontalLayout {
+                    spacing: 2px;
+                    alignment: end;
+
+                    IconButton {
+                        icon: IconSet.ChevronLeft;
+                        clicked => { root.prev-week(); }
+                    }
+                    IconButton {
+                        icon: IconSet.ChevronRight;
+                        clicked => { root.next-week(); }
+                    }
+                }
+            }
+
+            // Header
+            HorizontalLayout {
+                spacing: root.grid-gap;
+                height: 26px;
+
+                Rectangle { width: root.gutter-no; }
+                Rectangle { width: root.gutter-hours; }
+
+                for day[idx] in root.day-headers : Rectangle {
+                    width: root.col-width;
+                    background: transparent;
+
+                    Text {
+                        text: day;
+                        font-size: Theme.text-caption;
+                        font-weight: idx == root.today-col-index ? 700 : 600;
+                        color: idx == root.today-col-index ? Theme.accent-text : Theme.text-3;
+                        horizontal-alignment: center;
+                        vertical-alignment: center;
                     }
 
-                    Rectangle {
-                        width: hour-col-width; height: 26px;
-                        background: Theme.muted; border-width: 0px;
-                        horizontal-stretch: 0;
-                        Text { text: "Godz."; font-size: 10px; font-weight: 600; color: Theme.muted-foreground; horizontal-alignment: center; vertical-alignment: center; }
+                    if idx == root.today-col-index : Rectangle {
+                        y: parent.height - 2px;
+                        height: 2px;
+                        x: 8px;
+                        width: parent.width - 16px;
+                        border-radius: 1px;
+                        background: Theme.accent;
                     }
+                }
+            }
 
-                    for day[idx] in root.day-headers : Rectangle {
-                        height: 26px;
-                        width: day-col-width;
-                        background: idx == root.today-col-index ? #ffffff12 : Theme.muted;
-                        border-width: 0px;
-                        if idx == root.today-col-index : Rectangle {
-                            y: parent.height - 2px;
-                            height: 2px;
-                            background: #3b82f6;
+            // Rows
+            for row in root.grid-rows : HorizontalLayout {
+                spacing: root.grid-gap;
+                height: 66px;
+
+                Rectangle {
+                    width: root.gutter-no;
+                    background: transparent;
+                    Text {
+                        text: row.no;
+                        font-size: Theme.text-caption;
+                        color: Theme.text-4;
+                        horizontal-alignment: center;
+                        vertical-alignment: center;
+                    }
+                }
+
+                Rectangle {
+                    width: root.gutter-hours;
+                    background: transparent;
+                    VerticalLayout {
+                        alignment: center;
+                        spacing: 0px;
+                        Text {
+                            text: row.hour-from;
+                            font-size: Theme.text-caption;
+                            font-weight: 600;
+                            color: Theme.text-2;
+                            horizontal-alignment: center;
                         }
                         Text {
-                            text: day;
-                            font-size: 10px;
-                            font-weight: idx == root.today-col-index ? 700 : 600;
-                            color: idx == root.today-col-index ? #93c5fd : Theme.muted-foreground;
+                            text: row.hour-to;
+                            font-size: Theme.text-caption;
+                            color: Theme.text-4;
                             horizontal-alignment: center;
-                            vertical-alignment: center;
                         }
                     }
                 }
 
-                // Body rows
-                for row in root.grid-rows : HorizontalBox {
-                    spacing: 0px;
-                    padding: 0px;
-                    vertical-stretch: 0;
-                    min-height: 62px;
-
-                    Rectangle {
-                        width: nr-col-width; 
-                        background: Theme.muted; border-width: 0px;
-                        horizontal-stretch: 0;
-                        Text { text: row.no; font-size: 11px; font-weight: 600; color: Theme.muted-foreground; horizontal-alignment: center; vertical-alignment: center; }
-                    }
-
-                    Rectangle {
-                        width: hour-col-width; 
-                        background: Theme.muted; border-width: 0px;
-                        horizontal-stretch: 0;
-                        VerticalBox {
-                            alignment: center; padding: 2px; spacing: 0px;
-                            Text { text: row.hour-from; font-size: 10px; font-weight: 500; color: Theme.muted-foreground; horizontal-alignment: center; }
-                            Text { text: row.hour-to; font-size: 9px; color: #666; horizontal-alignment: center; }
-                        }
-                    }
-
-                    for cell[idx] in row.cells : GridCell {
-                        cell: cell;
-                        is-today: idx == root.today-col-index;
-                        width: day-col-width;
-                        clicked => {
-                            root.selected-cell = cell;
-                            root.overlay-open = true;
-                        }
+                for cell[idx] in row.cells : GridCell {
+                    cell: cell;
+                    is-today: idx == root.today-col-index;
+                    width: root.col-width;
+                    clicked => {
+                        root.selected-cell = cell;
+                        root.overlay-open = true;
                     }
                 }
             }
         }
     }
 
-    LessonPopover {
+    LessonModal {
         open: root.overlay-open;
         cell: root.selected-cell;
-        close => { root.overlay-open = false; }
+        dismiss => { root.overlay-open = false; }
     }
 }

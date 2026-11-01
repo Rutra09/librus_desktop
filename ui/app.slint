@@ -1,5 +1,6 @@
-import { Button, VerticalBox, HorizontalBox } from "std-widgets.slint";
 import { Theme } from "style.slint";
+import { Button, ButtonKind, Modal, Icon } from "kit.slint";
+import { IconSet } from "@lucide";
 import { Sidebar } from "sidebar.slint";
 import { LoginView } from "login.slint";
 import { DashboardView, DashboardGrade, DashboardHomework, DashboardAnnouncement, DashboardLesson } from "dashboard.slint";
@@ -16,16 +17,14 @@ import { SettingsView } from "settings.slint";
 export component MainWindow inherits Window {
     title: "Librus Desktop";
     icon: @image-url("../icon.png");
-    // width: 1200px;
-    // height: 800px;
-    
-    background: Theme.background;
+
+    background: Theme.bg-gradient;
 
     in-out property <int> active-page: 0; // 0: Login, 1: Dashboard, 2: Timetable, 3: Grades, 4: Announcements, 5: Attendance, 6: Messages, 7: Homework, 8: Events, 9: Settings
     in-out property <string> login-error;
     in-out property <bool> is-logging-in: false;
     in-out property <bool> has-synergia-credentials: false;
-    
+
     // Data properties for various views
     in-out property <string> user-name: "...";
     in-out property <string> lucky-number: "";
@@ -60,8 +59,6 @@ export component MainWindow inherits Window {
 
     callback save-jakdojade-settings(bool, string, string, string, string, string, string, string, string, string, string, string, string, string, bool, bool, string);
 
-
-
     // Dashboard widgets properties
     in-out property <[DashboardGrade]> dashboard-recent-grades;
     in-out property <[DashboardHomework]> dashboard-upcoming-homework;
@@ -77,7 +74,8 @@ export component MainWindow inherits Window {
 
     // Grades properties
     in-out property <[UISubjectGrades]> grades-list;
-    
+    in-out property <int> grades-semester: 2;
+
     // Announcements properties
     in-out property <[UIAnnouncement]> announcements-list;
 
@@ -102,7 +100,7 @@ export component MainWindow inherits Window {
     in-out property <bool> showing-details: false;
     callback request-messages();
     callback request-message-details(int);
-    
+
     // Homework properties
     in-out property <[UIHomework]> homework-list;
     callback request-homework();
@@ -111,12 +109,12 @@ export component MainWindow inherits Window {
     in-out property <[UIEvent]> events-upcoming;
     in-out property <[UIEvent]> events-today;
     in-out property <[UIEvent]> events-past;
-    
+
     // Synergia credentials dialog
     in-out property <bool> show-synergia-dialog: false;
     callback submit-synergia-credentials(string, string);
     callback skip-synergia-credentials();
-    
+
     // Auto-Updater properties
     in-out property <bool> show-update-dialog: false;
     in-out property <string> update-version: "";
@@ -124,15 +122,15 @@ export component MainWindow inherits Window {
     in-out property <string> update-status: "Nowa wersja jest gotowa do pobrania i instalacji.";
     callback request-install-update();
     callback close-update-dialog();
-    
+
     preferred-width: 1600px;
     preferred-height: 1000px;
 
     callback add-simulated-grade(int, string, float);
 
-    HorizontalBox {
-        padding: 0px;
+    HorizontalLayout {
         spacing: 0px;
+        padding: 0px;
 
         if active-page != 0 : Sidebar {
             active-page: active-page;
@@ -152,22 +150,20 @@ export component MainWindow inherits Window {
             refresh => { request-refresh(); }
         }
 
-
         Rectangle {
-            background: Theme.background;
+            background: Theme.bg-gradient;
             clip: true;
+            horizontal-stretch: 1;
 
-            LoginView {
-                visible: active-page == 0;
+            if active-page == 0 : LoginView {
                 error-message: login-error;
                 is-loading: is-logging-in;
                 login(email, password) => {
-                     request-login(email, password);
+                    request-login(email, password);
                 }
             }
 
-            DashboardView {
-                visible: active-page == 1;
+            if active-page == 1 : DashboardView {
                 user-name: user-name;
                 lucky-number: lucky-number;
                 lucky-number-day: lucky-number-day;
@@ -178,8 +174,7 @@ export component MainWindow inherits Window {
                 next-day-timetable-date: root.dashboard-next-day-timetable-date;
             }
 
-            TimetableView {
-                visible: active-page == 2;
+            if active-page == 2 : TimetableView {
                 grid-rows: timetable-grid-rows;
                 day-headers: timetable-day-headers;
                 week-range: timetable-week-range;
@@ -187,31 +182,28 @@ export component MainWindow inherits Window {
                 prev-week => { request-prev-week(); }
                 next-week => { request-next-week(); }
             }
-            
-            GradesView {
-                visible: active-page == 3;
+
+            if active-page == 3 : GradesView {
                 subjects: grades-list;
+                semester-index <=> root.grades-semester;
                 back => { active-page = 1; }
-                add-simulated-grade(idx, val, weight) => { 
-                    root.add-simulated-grade(idx, val, weight); 
+                add-simulated-grade(idx, val, weight) => {
+                    root.add-simulated-grade(idx, val, weight);
                 }
             }
-            
-            AnnouncementsView {
-                visible: active-page == 4;
+
+            if active-page == 4 : AnnouncementsView {
                 notices: announcements-list;
                 back => { active-page = 1; }
             }
-            
-            AttendanceView {
-                visible: active-page == 5;
+
+            if active-page == 5 : AttendanceView {
                 attendances: attendances_list;
                 frequency-str: attendance-frequency;
                 stats: attendance_stats;
             }
-            
-            MessagesView {
-                visible: active-page == 6;
+
+            if active-page == 6 : MessagesView {
                 messages: messages-list;
                 needs-credentials: !has-synergia-credentials;
                 selected-message-body: selected-message-body;
@@ -227,22 +219,19 @@ export component MainWindow inherits Window {
                 }
                 back => { active-page = 1; }
             }
-            
-            HomeworkView {
-                visible: active-page == 7;
+
+            if active-page == 7 : HomeworkView {
                 homework-list: homework-list;
                 back => { active-page = 1; }
             }
-            
-            EventsView {
-                visible: active-page == 8;
+
+            if active-page == 8 : EventsView {
                 upcoming-events: events-upcoming;
                 today-events: events-today;
                 past-events: events-past;
             }
 
-            SettingsView {
-                visible: active-page == 9;
+            if active-page == 9 : SettingsView {
                 jd-enabled: jd-enabled;
                 jd-city: jd-city;
                 jd-start-name: jd-start-name;
@@ -284,43 +273,70 @@ export component MainWindow inherits Window {
                 }
             }
 
+            // ── Update dialog ────────────────────────────────────────────────
+            Modal {
+                open: root.show-update-dialog;
+                panel-width: 360px;
+                dismiss => { root.close-update-dialog(); }
 
+                HorizontalLayout {
+                    spacing: Theme.space-3;
+                    alignment: start;
 
-            
-            // Update Dialog Overlay
-            if root.show-update-dialog : Rectangle {
-                width: 100%; height: 100%;
-                TouchArea {} // Block clicks to background
-                Rectangle {
-                    background: #00000080;
-                }
-                Rectangle {
-                    width: 380px; height: 180px;
-                    background: Theme.card;
-                    border-radius: Theme.radius;
-                    border-width: 1px;
-                    border-color: Theme.border;
-
-                    VerticalBox {
-                        padding: 24px;
-                        spacing: 16px;
-                        alignment: center;
-                        Text { text: "Dostępna Aktualizacja"; font-size: 20px; font-weight: 700; color: Theme.foreground; }
-                        Text { text: root.update-status + " (" + root.update-version + ")"; font-size: 14px; color: Theme.muted-foreground; wrap: word-wrap; }
-                        
-                        Rectangle { vertical-stretch: 1; }
-                        HorizontalBox {
-                            alignment: end;
-                            spacing: 12px;
-                            vertical-stretch: 0;
-                            if !root.is-updating : Button { text: "Później"; clicked => { root.close-update-dialog(); } }
-                            Button {
-                                text: root.is-updating ? "Pobieranie..." : "Aktualizuj";
-                                primary: true;
-                                enabled: !root.is-updating;
-                                clicked => { root.request-install-update(); }
-                            }
+                    Rectangle {
+                        width: 34px;
+                        height: 34px;
+                        border-radius: Theme.radius-lg;
+                        background: Theme.accent-soft;
+                        Icon {
+                            icon: IconSet.Download;
+                            size: 16px;
+                            tint: Theme.accent-text;
+                            weight: 1.75;
+                            x: (parent.width - self.width) / 2;
+                            y: (parent.height - self.height) / 2;
                         }
+                    }
+
+                    VerticalLayout {
+                        spacing: 2px;
+                        horizontal-stretch: 1;
+                        Text {
+                            text: "Dostępna aktualizacja";
+                            font-size: Theme.text-title;
+                            font-weight: 600;
+                            color: Theme.text;
+                        }
+                        Text {
+                            text: "Wersja " + root.update-version;
+                            font-size: Theme.text-small;
+                            color: Theme.text-3;
+                        }
+                    }
+                }
+
+                Text {
+                    text: root.update-status;
+                    font-size: Theme.text-small;
+                    color: Theme.text-2;
+                    wrap: word-wrap;
+                }
+
+                HorizontalLayout {
+                    spacing: Theme.space-2;
+
+                    if !root.is-updating : Button {
+                        label: "Później";
+                        kind: ButtonKind.ghost;
+                        horizontal-stretch: 1;
+                        clicked => { root.close-update-dialog(); }
+                    }
+                    Button {
+                        label: root.is-updating ? "Pobieranie…" : "Zainstaluj";
+                        kind: ButtonKind.primary;
+                        horizontal-stretch: 1;
+                        enabled: !root.is-updating;
+                        clicked => { root.request-install-update(); }
                     }
                 }
             }

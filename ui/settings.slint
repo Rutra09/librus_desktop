@@ -1,13 +1,52 @@
-import { Button, LineEdit, ScrollView, VerticalBox, HorizontalBox, CheckBox } from "std-widgets.slint";
+import { ScrollView } from "std-widgets.slint";
 import { Theme } from "style.slint";
-import { IconDisplay, IconSet } from "@lucide";
+import { Icon, Button, ButtonKind, TextField, Toggle, Card, Divider, PageBody, PageColumn, PageHeader } from "kit.slint";
+import { IconSet } from "@lucide";
+
+component SwitchRow {
+    in property <string> label;
+    in property <string> hint;
+    in property <bool> checked: false;
+    callback toggled(bool);
+
+    HorizontalLayout {
+        spacing: Theme.space-4;
+        alignment: start;
+        padding-top: Theme.space-1;
+        padding-bottom: Theme.space-1;
+
+        VerticalLayout {
+            spacing: 1px;
+            horizontal-stretch: 1;
+
+            Text {
+                text: root.label;
+                font-size: Theme.text-body;
+                color: Theme.text;
+                vertical-alignment: center;
+                wrap: word-wrap;
+            }
+            if root.hint != "" : Text {
+                text: root.hint;
+                font-size: Theme.text-caption;
+                color: Theme.text-3;
+                wrap: word-wrap;
+            }
+        }
+
+        Toggle {
+            checked: root.checked;
+            toggled(v) => { root.toggled(v); }
+        }
+    }
+}
 
 export component SettingsView inherits Rectangle {
-    background: Theme.background;
+    background: Theme.bg-gradient;
 
     in-out property <bool> jd-enabled: true;
     in-out property <string> jd-city: "WARSZAWA";
-    
+
     in-out property <string> jd-start-name: "Plac Defilad 1";
     in-out property <string> jd-start-type: "ADDRESS";
     in-out property <string> jd-start-lat: "52.2319";
@@ -28,289 +67,267 @@ export component SettingsView inherits Rectangle {
     in-out property <string> save-status: "";
     in-out property <bool> show-advanced: false;
 
-
-
     callback save-settings();
 
     ScrollView {
-        VerticalBox {
-            padding: 24px;
-            spacing: 20px;
+        PageBody {
+            PageColumn {
+            width-px: 760px;
 
-            // Page Header
-            HorizontalBox {
-                spacing: 12px;
-                alignment: start;
-                Rectangle {
-                    width: 32px;
-                    IconDisplay {
-                        icon: IconSet.Settings;
-                        size: 28px;
-                        stroke-width: 2.2;
-                        stroke: #3b82f6;
-                        y: (parent.height - self.height) / 2;
-                    }
-                }
-                VerticalBox {
-                    spacing: 2px;
-                    Text {
-                        text: "Ustawienia Aplikacji";
-                        font-size: 24px;
-                        font-weight: 700;
-                        color: Theme.foreground;
-                    }
-                    Text {
-                        text: "Konfiguracja widżetów i preferencji dojazdu do szkoły";
-                        font-size: 13px;
-                        color: Theme.muted-foreground;
-                    }
-                }
+            PageHeader {
+                title: "Ustawienia";
+                subtitle: "Dojazd do szkoły i preferencje";
             }
 
-            // Jakdojade Integration Card (User Friendly)
-            Rectangle {
-                background: Theme.card;
-                border-radius: Theme.radius;
-                border-width: 1px;
-                border-color: Theme.border;
+            // ── Commute ──────────────────────────────────────────────────────
+            Card {
+                VerticalLayout {
+                    padding: Theme.space-4;
+                    spacing: Theme.space-4;
 
-                VerticalBox {
-                    padding: 24px;
-                    spacing: 20px;
-
-                    // Section Title
-                    HorizontalBox {
-                        spacing: 12px;
+                    HorizontalLayout {
+                        spacing: Theme.space-3;
                         alignment: start;
+
                         Rectangle {
-                            width: 28px;
-                            IconDisplay {
+                            width: 32px;
+                            height: 32px;
+                            border-radius: Theme.radius-lg;
+                            background: Theme.accent-soft;
+                            Icon {
                                 icon: IconSet.Bus;
-                                size: 24px;
-                                stroke-width: 2.0;
-                                stroke: #3b82f6;
+                                size: 16px;
+                                tint: Theme.accent-text;
+                                weight: 1.75;
+                                x: (parent.width - self.width) / 2;
                                 y: (parent.height - self.height) / 2;
                             }
                         }
-                        VerticalBox {
-                            spacing: 2px;
-                            Text {
-                                text: "Dojazd do Szkoły (Jakdojade)";
-                                font-size: 18px;
-                                font-weight: 700;
-                                color: Theme.foreground;
-                            }
-                            Text {
-                                text: "Automatycznie wylicza optymalny czas wyjścia z domu na pierwszą lekcję";
-                                font-size: 12px;
-                                color: Theme.muted-foreground;
-                            }
-                        }
-                    }
-
-                    Rectangle { height: 1px; background: Theme.border; }
-
-                    CheckBox {
-                        text: "Włącz widżet trasy na panelu bocznym";
-                        checked: root.jd-enabled;
-                        toggled => { root.jd-enabled = self.checked; }
-                    }
-
-                    // City & Buffer Row
-                    HorizontalBox {
-                        spacing: 16px;
-                        VerticalBox {
-                            horizontal-stretch: 2;
-                            spacing: 6px;
-                            Text { text: "Miasto (np. Warszawa, Kraków, Poznań):"; font-size: 13px; font-weight: 600; color: Theme.foreground; }
-                            LineEdit {
-                                text: root.jd-city;
-                                placeholder-text: "np. Warszawa";
-                                edited(val) => { root.jd-city = val; }
-                            }
-                        }
-                        VerticalBox {
+                        VerticalLayout {
+                            spacing: 1px;
                             horizontal-stretch: 1;
-                            spacing: 6px;
-                            Text { text: "Zapas czasu przed lekcją (w minutach):"; font-size: 13px; font-weight: 600; color: Theme.foreground; }
-                            LineEdit {
-                                text: root.jd-buffer;
-                                placeholder-text: "5";
-                                edited(val) => { root.jd-buffer = val; }
+                            Text {
+                                text: "Dojazd do szkoły";
+                                font-size: Theme.text-title;
+                                font-weight: 600;
+                                color: Theme.text;
+                            }
+                            Text {
+                                text: "Jakdojade wylicza, o której musisz wyjść na pierwszą lekcję.";
+                                font-size: Theme.text-caption;
+                                color: Theme.text-3;
+                                wrap: word-wrap;
                             }
                         }
                     }
 
-                    // Start Location Input
-                    VerticalBox {
-                        spacing: 6px;
-                        Text { text: "🏠 Skąd wyjeżdżasz (Adres domowy lub Przystanek początkowy):"; font-size: 13px; font-weight: 600; color: Theme.foreground; }
-                        LineEdit {
-                            text: root.jd-start-name;
-                            placeholder-text: "np. ul. Marszałkowska 10 lub Przystanek Centrum";
-                            edited(val) => { root.jd-start-name = val; }
-                        }
-                        Text { text: "Podaj ulicę z numerem domu lub nazwę przystanku startowego"; font-size: 11px; color: Theme.muted-foreground; }
+                    Divider {}
+
+                    SwitchRow {
+                        label: "Widżet na panelu bocznym";
+                        hint: "Pokazuje najbliższe połączenie w menu.";
+                        checked: root.jd-enabled;
+                        toggled(v) => { root.jd-enabled = v; }
                     }
 
-                    // Destination Location Input
-                    VerticalBox {
-                        spacing: 6px;
-                        Text { text: "🏫 Dokąd jedziesz (Adres szkoły lub Przystanek docelowy):"; font-size: 13px; font-weight: 600; color: Theme.foreground; }
-                        LineEdit {
-                            text: root.jd-dest-name;
-                            placeholder-text: "np. ul. Nowowiejska 37 lub Przystanek Międzynarodowa";
-                            edited(val) => { root.jd-dest-name = val; }
+                    Divider {}
+
+                    HorizontalLayout {
+                        spacing: Theme.space-4;
+                        // No `alignment: start` here: that pins every child to its
+                        // minimum preferred width and ignores horizontal-stretch,
+                        // which collapsed the "Miasto" field down to "Wa".
+
+                        VerticalLayout {
+                            horizontal-stretch: 2;
+                            TextField {
+                                label: "Miasto";
+                                placeholder: "np. Warszawa";
+                                text <=> root.jd-city;
+                            }
                         }
-                        Text { text: "Podaj adres szkoły lub nazwę najbliższego przystanku docelowego"; font-size: 11px; color: Theme.muted-foreground; }
+                        VerticalLayout {
+                            horizontal-stretch: 1;
+                            TextField {
+                                label: "Zapas (min)";
+                                placeholder: "5";
+                                text <=> root.jd-buffer;
+                            }
+                        }
                     }
 
-                    // Preferred Lines & Metro Section
-                    VerticalBox {
-                        spacing: 6px;
-                        Text { text: "⭐ Preferowane linie i środki transportu:"; font-size: 13px; font-weight: 600; color: Theme.foreground; }
-                        
-                        CheckBox {
-                            text: "Preferuj Metro (M1 / M2)";
-                            checked: root.jd-prefer-metro;
-                            toggled => { root.jd-prefer-metro = self.checked; }
+                    VerticalLayout {
+                        spacing: Theme.space-2;
+                        TextField {
+                            label: "Skąd wyjeżdżasz";
+                            placeholder: "ul. Marszałkowska 10 lub nazwa przystanku";
+                            text <=> root.jd-start-name;
                         }
-
-                        LineEdit {
-                            text: root.jd-preferred-lines;
-                            placeholder-text: "np. M1, M2, 509, 17";
-                            edited(val) => { root.jd-preferred-lines = val; }
+                        Text {
+                            text: "Adres domowy albo nazwa przystanku początkowego.";
+                            font-size: Theme.text-caption;
+                            color: Theme.text-4;
                         }
-                        Text { text: "Wpisz numery linii, które mają mieć priorytet podczas wyszukiwania trasy"; font-size: 11px; color: Theme.muted-foreground; }
                     }
 
-                    // Avoid Lines & Route Preferences Section
-                    VerticalBox {
-                        spacing: 6px;
-                        Text { text: "🚫 Linie do unikania (opcjonalnie):"; font-size: 13px; font-weight: 600; color: Theme.foreground; }
-                        LineEdit {
-                            text: root.jd-avoid-lines;
-                            placeholder-text: "np. 516, L-1, N42";
-                            edited(val) => { root.jd-avoid-lines = val; }
+                    VerticalLayout {
+                        spacing: Theme.space-2;
+                        TextField {
+                            label: "Dokąd jedziesz";
+                            placeholder: "adres szkoły lub nazwa przystanku";
+                            text <=> root.jd-dest-name;
                         }
-                        Text { text: "Wpisz numery linii oddzielone przecinkami, których trasa ma unikać"; font-size: 11px; color: Theme.muted-foreground; }
+                        Text {
+                            text: "Adres szkoły albo najbliższy przystanek docelowy.";
+                            font-size: Theme.text-caption;
+                            color: Theme.text-4;
+                        }
                     }
 
-                    CheckBox {
-                        text: "Preferuj trasy bezpośrednie (bez przesiadek)";
+                    Divider {}
+
+                    SwitchRow {
+                        label: "Preferuj metro";
+                        hint: "Trasa w pierwszej kolejności korzysta z M1 / M2.";
+                        checked: root.jd-prefer-metro;
+                        toggled(v) => { root.jd-prefer-metro = v; }
+                    }
+
+                    SwitchRow {
+                        label: "Unikaj przesiadek";
+                        hint: "Preferuje połączenia bezpośrednie, nawet jeśli są dłuższe.";
                         checked: root.jd-avoid-changes;
-                        toggled => { root.jd-avoid-changes = self.checked; }
+                        toggled(v) => { root.jd-avoid-changes = v; }
                     }
 
-                    Rectangle { height: 1px; background: Theme.border; }
+                    Divider {}
 
+                    TextField {
+                        label: "Preferowane linie";
+                        placeholder: "np. M1, 509, 17";
+                        text <=> root.jd-preferred-lines;
+                    }
 
+                    TextField {
+                        label: "Linie do unikania";
+                        placeholder: "np. 516, L-1, N42";
+                        text <=> root.jd-avoid-lines;
+                    }
 
-                    // Save Button & Status Row
-                    HorizontalBox {
-                        alignment: space-between;
+                    Divider {}
+
+                    HorizontalLayout {
+                        spacing: Theme.space-2;
+                        alignment: start;
+
                         Text {
                             text: root.save-status;
-                            font-size: 13px;
+                            font-size: Theme.text-caption;
                             font-weight: 600;
-                            color: #22c55e;
+                            color: Theme.success;
                             vertical-alignment: center;
+                            horizontal-stretch: 1;
                         }
-                        HorizontalBox {
-                            spacing: 12px;
-                            Button {
-                                text: root.show-advanced ? "Ukryj opcje zaawansowane" : "Opcje zaawansowane GPS";
-                                clicked => { root.show-advanced = !root.show-advanced; }
-                            }
-                            Button {
-                                text: "Zapisz i Pobierz Trasę";
-                                primary: true;
-                                clicked => { root.save-settings(); }
-                            }
+
+                        Button {
+                            label: root.show-advanced ? "Ukryj zaawansowane" : "Zaawansowane";
+                            kind: ButtonKind.ghost;
+                            clicked => { root.show-advanced = !root.show-advanced; }
+                        }
+                        Button {
+                            label: "Zapisz";
+                            kind: ButtonKind.primary;
+                            with-icon: true;
+                            icon: IconSet.Check;
+                            clicked => { root.save-settings(); }
                         }
                     }
                 }
             }
 
-            // Advanced Technical Settings Card (Optional / Collapsible)
-            if root.show-advanced : Rectangle {
-                background: Theme.card;
-                border-radius: Theme.radius;
-                border-width: 1px;
-                border-color: Theme.border;
+            // ── Advanced ─────────────────────────────────────────────────────
+            if root.show-advanced : Card {
+                VerticalLayout {
+                    padding: Theme.space-4;
+                    spacing: Theme.space-4;
 
-                VerticalBox {
-                    padding: 20px;
-                    spacing: 16px;
+                    HorizontalLayout {
+                        spacing: Theme.space-2;
+                        alignment: start;
+                        Icon {
+                            icon: IconSet.TriangleAlert;
+                            size: 14px;
+                            tint: Theme.warning;
+                            weight: 1.75;
+                            y: 1px;
+                        }
+                        Text {
+                            text: "Współrzędne są uzupełniane automatycznie z podanych adresów. Koryguj tylko wtedy, gdy trasa wypada błędnie.";
+                            font-size: Theme.text-caption;
+                            color: Theme.text-3;
+                            wrap: word-wrap;
+                            horizontal-stretch: 1;
+                        }
+                    }
+
+                    Divider {}
 
                     Text {
-                        text: "Zaawansowana konfiguracja współrzędnych i kodów Jakdojade";
-                        font-size: 14px;
+                        text: "Punkt początkowy";
+                        font-size: Theme.text-caption;
                         font-weight: 600;
-                        color: #eab308;
+                        color: Theme.text-3;
                     }
+                    HorizontalLayout {
+                        spacing: Theme.space-3;
+                        VerticalLayout {
+                            horizontal-stretch: 1;
+                            TextField { label: "Typ"; text <=> root.jd-start-type; }
+                        }
+                        VerticalLayout {
+                            horizontal-stretch: 1;
+                            TextField { label: "Szerokość"; text <=> root.jd-start-lat; }
+                        }
+                        VerticalLayout {
+                            horizontal-stretch: 1;
+                            TextField { label: "Długość"; text <=> root.jd-start-lon; }
+                        }
+                        VerticalLayout {
+                            horizontal-stretch: 1;
+                            TextField { label: "Kod"; text <=> root.jd-start-code; }
+                        }
+                    }
+
                     Text {
-                        text: "Współrzędne geograficzne i kody przystanków są uzupełniane automatycznie na podstawie adresów podanych wyżej. Możesz je tutaj ręcznie skorygować.";
-                        font-size: 12px;
-                        color: Theme.muted-foreground;
+                        text: "Punkt docelowy";
+                        font-size: Theme.text-caption;
+                        font-weight: 600;
+                        color: Theme.text-3;
                     }
-
-                    Rectangle { height: 1px; background: Theme.border; }
-
-                    // Advanced Start Location
-                    Text { text: "Punkt Początkowy (Szczegóły):"; font-size: 13px; font-weight: 600; color: Theme.foreground; }
-                    HorizontalBox {
-                        spacing: 12px;
-                        VerticalBox {
-                            spacing: 4px;
-                            Text { text: "Typ punktu (ADDRESS / STOP_POINT):"; font-size: 11px; color: Theme.muted-foreground; }
-                            LineEdit { text: root.jd-start-type; edited(v) => { root.jd-start-type = v; } }
+                    HorizontalLayout {
+                        spacing: Theme.space-3;
+                        VerticalLayout {
+                            horizontal-stretch: 1;
+                            TextField { label: "Typ"; text <=> root.jd-dest-type; }
                         }
-                        VerticalBox {
-                            spacing: 4px;
-                            Text { text: "Szerokość geogr. (Lat):"; font-size: 11px; color: Theme.muted-foreground; }
-                            LineEdit { text: root.jd-start-lat; edited(v) => { root.jd-start-lat = v; } }
+                        VerticalLayout {
+                            horizontal-stretch: 1;
+                            TextField { label: "Szerokość"; text <=> root.jd-dest-lat; }
                         }
-                        VerticalBox {
-                            spacing: 4px;
-                            Text { text: "Długość geogr. (Lon):"; font-size: 11px; color: Theme.muted-foreground; }
-                            LineEdit { text: root.jd-start-lon; edited(v) => { root.jd-start-lon = v; } }
+                        VerticalLayout {
+                            horizontal-stretch: 1;
+                            TextField { label: "Długość"; text <=> root.jd-dest-lon; }
                         }
-                        VerticalBox {
-                            spacing: 4px;
-                            Text { text: "Kod przystanku:"; font-size: 11px; color: Theme.muted-foreground; }
-                            LineEdit { text: root.jd-start-code; edited(v) => { root.jd-start-code = v; } }
-                        }
-                    }
-
-                    // Advanced Destination Location
-                    Text { text: "Punkt Docelowy (Szczegóły):"; font-size: 13px; font-weight: 600; color: Theme.foreground; }
-                    HorizontalBox {
-                        spacing: 12px;
-                        VerticalBox {
-                            spacing: 4px;
-                            Text { text: "Typ punktu (ADDRESS / STOP_POINT):"; font-size: 11px; color: Theme.muted-foreground; }
-                            LineEdit { text: root.jd-dest-type; edited(v) => { root.jd-dest-type = v; } }
-                        }
-                        VerticalBox {
-                            spacing: 4px;
-                            Text { text: "Szerokość geogr. (Lat):"; font-size: 11px; color: Theme.muted-foreground; }
-                            LineEdit { text: root.jd-dest-lat; edited(v) => { root.jd-dest-lat = v; } }
-                        }
-                        VerticalBox {
-                            spacing: 4px;
-                            Text { text: "Długość geogr. (Lon):"; font-size: 11px; color: Theme.muted-foreground; }
-                            LineEdit { text: root.jd-dest-lon; edited(v) => { root.jd-dest-lon = v; } }
-                        }
-                        VerticalBox {
-                            spacing: 4px;
-                            Text { text: "Kod przystanku:"; font-size: 11px; color: Theme.muted-foreground; }
-                            LineEdit { text: root.jd-dest-code; edited(v) => { root.jd-dest-code = v; } }
+                        VerticalLayout {
+                            horizontal-stretch: 1;
+                            TextField { label: "Kod"; text <=> root.jd-dest-code; }
                         }
                     }
                 }
+            }
+
+            Rectangle { vertical-stretch: 1; min-height: 0px; }
             }
         }
     }
 }
-
