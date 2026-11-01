@@ -14,6 +14,7 @@ use librus_front::api::auth::AuthState;
 use librus_front::api::models::Lesson; // Import Lesson
 use librus_front::session;
 use librus_front::updater;
+use librus_front::perf;
 
 slint::include_modules!();
 
@@ -38,28 +39,26 @@ fn session_to_auth(s: session::Session) -> AuthState {
 }
 
 fn auth_to_session(a: AuthState) -> session::Session {
-    session::Session {
-        access_token: a.access_token,
-        expires_at: a.expires_at,
-        refresh_token: a.refresh_token,
-        portal_access_token: a.portal_access_token,
-        portal_refresh_token: a.portal_refresh_token,
-        portal_expires_at: a.portal_expires_at,
-        user_id: a.user_id,
-        synergia_login: a.synergia_login,
-        portal_email: a.portal_email,
-        portal_password: a.portal_password,
-        synergia_username: a.synergia_username,
-        synergia_password: a.synergia_password,
-        messages_session_id: a.messages_session_id,
-        messages_session_expiry: a.messages_session_expiry,
-        synergia_cookie: a.synergia_cookie,
-    }
+    session::from_auth(&a)
 }
 
 async fn fetch_metadata(client: LibrusClient, state: AppState) {
+    // Seven lookups that do not depend on each other. They used to be awaited one
+    // after another (~1.9 s of dead time), and because every other fetch waits for
+    // metadata, that serialisation delayed the whole startup. Issued together the
+    // wall clock is bounded by the slowest single response instead of their sum.
+    let (subjects, teachers, cats, comments, types, rooms, hw_cats) = tokio::join!(
+        client.fetch_subjects(),
+        client.fetch_teachers(),
+        client.fetch_grade_categories(),
+        client.fetch_grade_comments(),
+        client.fetch_attendance_types(),
+        client.fetch_classrooms(),
+        client.fetch_homework_categories(),
+    );
+
     // 1. Subjects
-    if let Ok(subjects) = client.fetch_subjects().await {
+    if let Ok(subjects) = subjects {
         let mut map = state.subjects.lock().await;
         for s in subjects {
             if let Some(id) = s.id {
@@ -68,7 +67,7 @@ async fn fetch_metadata(client: LibrusClient, state: AppState) {
         }
     }
     // 2. Teachers
-    if let Ok(teachers) = client.fetch_teachers().await {
+    if let Ok(teachers) = teachers {
         let mut map = state.teachers.lock().await;
         for t in teachers {
             if let Some(id) = t.id {
@@ -80,7 +79,7 @@ async fn fetch_metadata(client: LibrusClient, state: AppState) {
         }
     }
     // 3. Grade Categories
-    if let Ok(cats) = client.fetch_grade_categories().await {
+    if let Ok(cats) = cats {
         let mut map = state.grade_categories.lock().await;
         for c in cats {
             if let Some(id) = c.id {
@@ -89,14 +88,9 @@ async fn fetch_metadata(client: LibrusClient, state: AppState) {
         }
     }
     // 3.5 Grade Comments
-    match client.fetch_grade_comments().await {
+    match comments {
         Ok(comments) => {
             log::info!("Successfully fetched {} grade comments!", comments.len());
-            for c in &comments {
-                if let (Some(id), Some(text)) = (c.id, &c.text) {
-                    log::info!("Comment [ID: {}]: {}", id, text);
-                }
-            }
             let mut map = state.grade_comments.lock().await;
             for c in comments {
                 if let Some(id) = c.id {
@@ -110,7 +104,7 @@ async fn fetch_metadata(client: LibrusClient, state: AppState) {
         }
     }
     // 4. Attendance Types
-    if let Ok(types) = client.fetch_attendance_types().await {
+    if let Ok(types) = types {
         let mut map = state.attendance_types.lock().await;
         for t in types {
             if let Some(id) = t.id {
@@ -119,7 +113,7 @@ async fn fetch_metadata(client: LibrusClient, state: AppState) {
         }
     }
     // 5. Classrooms
-    if let Ok(rooms) = client.fetch_classrooms().await {
+    if let Ok(rooms) = rooms {
         let mut map = state.classrooms.lock().await;
         for r in rooms {
             if let Some(id) = r.id {
@@ -128,7 +122,7 @@ async fn fetch_metadata(client: LibrusClient, state: AppState) {
         }
     }
     // 6. Event/Homework Categories (For Timetable & Homework)
-    if let Ok(cats) = client.fetch_homework_categories().await {
+    if let Ok(cats) = hw_cats {
         let mut hw_map = state.homework_categories.lock().await;
         let mut ev_map = state.event_categories.lock().await;
         for c in cats {
@@ -327,6 +321,7 @@ async fn update_grades_ui(window_weak: slint::Weak<MainWindow>, state: AppState)
                 subject: subj_name.into(),
                 grade: val_str.clone().into(),
                 date: g.add_date.clone().unwrap_or("-".into()).into(),
+                tone: color.into(),
             });
     }
 
@@ -746,10 +741,14 @@ async fn fetch_announcements_data(client: LibrusClient, window_weak: slint::Weak
 
 async fn fetch_attendances_data(client: LibrusClient, window_weak: slint::Weak<MainWindow>, state: AppState) {
     if let Ok(atts) = client.fetch_attendances().await {
-        let types_map = state.attendance_types.lock().await;
+        // Cloned, not borrowed: these guards used to be held across the lesson
+        // requests below, so every other fetch that needed `subjects` waited for
+        // a network round trip it had nothing to do with. The maps hold a few
+        // dozen entries; copying them costs less than one HTTP round trip.
+        let types_map = state.attendance_types.lock().await.clone();
         // subjects_map is used if lesson fetching fails or for fallback
-        let subjects_map = state.subjects.lock().await; 
-        let classrooms_map = state.classrooms.lock().await;
+        let subjects_map = state.subjects.lock().await.clone();
+        let classrooms_map = state.classrooms.lock().await.clone();
 
         // 1. Collect Lesson IDs
         let mut lesson_ids: Vec<i64> = atts.iter()
@@ -944,9 +943,12 @@ async fn fetch_messages_data(client: LibrusClient, window_weak: slint::Weak<Main
 async fn fetch_homework_data(client: LibrusClient, window_weak: slint::Weak<MainWindow>, state: AppState) {
     // 1. Fetch Categories (if empty)
     {
-        let mut cats = state.homework_categories.lock().await;
-        if cats.is_empty() {
+        let is_empty = state.homework_categories.lock().await.is_empty();
+        if is_empty {
             if let Ok(new_cats) = client.fetch_homework_categories().await {
+                // Re-acquire only to write, so the request above is not made
+                // while holding the lock other tasks need.
+                let mut cats = state.homework_categories.lock().await;
                 for c in new_cats {
                     if let Some(id) = c.id {
                         cats.insert(id, c);
@@ -1201,7 +1203,9 @@ async fn fetch_jakdojade_commute(
     let monday = get_current_monday();
     let monday_str = monday.format("%Y-%m-%d").to_string();
 
-    let subjects_map = state.subjects.lock().await;
+    // Cloned: the guard would otherwise be held across the two timetable
+    // requests below, and those are the ones every other fetch queues behind.
+    let subjects_map = state.subjects.lock().await.clone();
     let resolve_subject = |id_ref: &Option<librus_front::api::models::IdRef>| -> String {
         id_ref.as_ref().and_then(|s| s.id).and_then(|id| subjects_map.get(&id)).cloned().unwrap_or_else(|| "Lekcja".to_string())
     };
@@ -1370,32 +1374,58 @@ async fn fetch_jakdojade_commute(
     }
 }
 
+/// Wrap a fetch future so its wall-clock cost lands in the log. The refresh runs
+/// nine of these concurrently, so this is what tells us which source is slow.
+async fn timed<F: std::future::Future>(label: &'static str, fut: F) -> F::Output {
+    let started = std::time::Instant::now();
+    let at = perf::since_boot_ms();
+    let out = fut.await;
+    log::info!(
+        "[perf] fetch {:>6} ms  {} (started @{} ms)",
+        started.elapsed().as_millis(),
+        label,
+        at
+    );
+    out
+}
+
 async fn refresh_all_data(client: LibrusClient, window_weak: slint::Weak<MainWindow>, state: AppState, week_start: String) {
     // 1. Metadata (fast, sync-ish)
     fetch_metadata(client.clone(), state.clone()).await;
-    
-    // 2. Data fetching (concurrent)
-    let t1 = fetch_dashboard_data(client.clone(), window_weak.clone());
-    let t2 = fetch_grades_data(client.clone(), window_weak.clone(), state.clone());
-    let t3 = fetch_timetable_data(client.clone(), window_weak.clone(), week_start, state.clone());
-    let t4 = fetch_announcements_data(client.clone(), window_weak.clone(), state.clone());
-    let t5 = fetch_attendances_data(client.clone(), window_weak.clone(), state.clone());
-    let t6 = fetch_messages_data(client.clone(), window_weak.clone());
-    let t7 = fetch_homework_data(client.clone(), window_weak.clone(), state.clone());
-    let t8 = fetch_events_data(client.clone(), window_weak.clone(), state.clone());
-    let t9 = fetch_jakdojade_commute(client.clone(), window_weak.clone(), state.clone());
+    perf::mark("metadata ready");
+
+    // 2. Data fetching.
+    // Spawned, not merely joined: `tokio::join!` polls every future on this one
+    // task, so the parsing and model building inside each fetch (seconds of CPU
+    // across all of them) ran one after another and the tail was the sum, not the
+    // slowest. Separate tasks spread that work over the worker threads.
+    let t1 = tokio::spawn(timed("dashboard", fetch_dashboard_data(client.clone(), window_weak.clone())));
+    let t2 = tokio::spawn(timed("grades", fetch_grades_data(client.clone(), window_weak.clone(), state.clone())));
+    let t3 = tokio::spawn(timed("timetable", fetch_timetable_data(client.clone(), window_weak.clone(), week_start, state.clone())));
+    let t4 = tokio::spawn(timed("announcements", fetch_announcements_data(client.clone(), window_weak.clone(), state.clone())));
+    let t5 = tokio::spawn(timed("attendance", fetch_attendances_data(client.clone(), window_weak.clone(), state.clone())));
+    let t6 = tokio::spawn(timed("messages", fetch_messages_data(client.clone(), window_weak.clone())));
+    let t7 = tokio::spawn(timed("homework", fetch_homework_data(client.clone(), window_weak.clone(), state.clone())));
+    let t8 = tokio::spawn(timed("events", fetch_events_data(client.clone(), window_weak.clone(), state.clone())));
+    let t9 = tokio::spawn(timed("commute", fetch_jakdojade_commute(client.clone(), window_weak.clone(), state.clone())));
 
     
     // Wait for all
     tokio::join!(t1, t2, t3, t4, t5, t6, t7, t8, t9);
-    
+
+    perf::mark("all data ready");
+    log::info!("[perf] {} HTTP requests this process", librus_front::api::client::request_count());
     log::info!("Refresh complete.");
 }
 
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    // Setup file logging
+    perf::boot();
+
+    // Setup file logging. Info on purpose: `Debug` also un-mutes third-party
+    // crates (the HTML parser logs every selector match with the whole DOM —
+    // megabytes per page), which turns logging into the bottleneck it measures.
     if let Ok(log_file) = std::fs::File::create("librus.log") {
         let _ = simplelog::WriteLogger::init(
             simplelog::LevelFilter::Info,
@@ -1403,6 +1433,7 @@ async fn main() -> Result<()> {
             log_file,
         );
     }
+    perf::mark("logging ready");
 
     // Force Skia backend if not already set
     if std::env::var("SLINT_BACKEND").is_err() {
@@ -1411,6 +1442,7 @@ async fn main() -> Result<()> {
 
     // Initialize UI
     let main_window = MainWindow::new()?;
+    perf::mark("window created");
     let app_state = Arc::new(Mutex::new(AppState::new()));
 
     if let Ok(jd_cfg) = librus_front::api::jakdojade::load_config() {
@@ -1996,6 +2028,7 @@ async fn main() -> Result<()> {
     });
 
 
+    perf::mark("entering event loop");
     main_window.run()?;
     Ok(())
 }

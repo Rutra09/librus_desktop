@@ -3,9 +3,19 @@ use reqwest::Client;
 use serde_json::Value;
 use tokio::sync::Mutex;
 use std::sync::Arc;
+use std::sync::atomic::{AtomicUsize, Ordering};
 
 use super::auth::{self, AuthState};
 use super::constants::*;
+
+/// How many HTTP requests this process has issued. Logged once per refresh, so a
+/// creeping N+1 shows up as a number instead of a feeling.
+static REQUEST_COUNT: AtomicUsize = AtomicUsize::new(0);
+
+/// Total requests issued since process start.
+pub fn request_count() -> usize {
+    REQUEST_COUNT.load(Ordering::Relaxed)
+}
 
 /// High-level Librus API client that manages authentication and requests.
 #[derive(Clone)]
@@ -49,6 +59,7 @@ impl LibrusClient {
         let mut auth = self.auth.lock().await;
 
         if !auth.is_valid() {
+            let started = std::time::Instant::now();
             // Try refreshing the Synergia token via portal
             match auth::refresh_synergia_token(&auth).await {
                 Ok(new_auth) => {
@@ -62,6 +73,15 @@ impl LibrusClient {
                     *auth = new_auth;
                 }
             }
+            log::info!(
+                "[perf] token refresh @{:>6} ms  took {:>6} ms",
+                crate::perf::since_boot_ms(),
+                started.elapsed().as_millis()
+            );
+            // Persist it: otherwise the next start refreshes all over again.
+            if let Err(e) = crate::session::save_session(&crate::session::from_auth(&auth)) {
+                log::warn!("Could not persist refreshed session: {e}");
+            }
         }
 
         Ok(auth.access_token.clone())
@@ -74,6 +94,9 @@ impl LibrusClient {
         let token = self.ensure_token().await?;
         let url = format!("{}/{}", LIBRUS_API_URL, endpoint);
 
+        let started = std::time::Instant::now();
+        REQUEST_COUNT.fetch_add(1, Ordering::Relaxed);
+
         let response = self
             .http
             .get(&url)
@@ -84,7 +107,6 @@ impl LibrusClient {
 
         let status = response.status();
 
-        // Handle 503 — maintenance
         if status.as_u16() == 503 {
             bail!("Librus API jest w trybie konserwacji (503)");
         }
@@ -93,6 +115,24 @@ impl LibrusClient {
             .text()
             .await
             .context("Nie udało się odczytać odpowiedzi")?;
+
+        let elapsed = started.elapsed();
+        if elapsed.as_millis() > 300 {
+            log::warn!(
+                "[perf] slow request @{:>6} ms  {:>6} ms  {} ({} B)",
+                crate::perf::since_boot_ms(),
+                elapsed.as_millis(),
+                endpoint,
+                body.len()
+            );
+        } else {
+            log::debug!(
+                "[perf] request      @{:>6} ms  {:>6} ms  {}",
+                crate::perf::since_boot_ms(),
+                elapsed.as_millis(),
+                endpoint
+            );
+        }
 
         if body.is_empty() {
             bail!("Pusta odpowiedź z serwera dla endpoint: {endpoint}");

@@ -57,3 +57,28 @@ pub fn clear_session() -> Result<()> {
     }
     Ok(())
 }
+
+/// Map the in-memory auth state onto the on-disk session.
+///
+/// Used after a login *and* after a silent token refresh: the refresh used to
+/// live only in memory, so every restart paid for a fresh OAuth round trip
+/// (~0.9 s before the first data request) even seconds after the previous run.
+pub fn from_auth(a: &crate::api::auth::AuthState) -> Session {
+    Session {
+        access_token: a.access_token.clone(),
+        expires_at: a.expires_at,
+        refresh_token: a.refresh_token.clone(),
+        portal_access_token: a.portal_access_token.clone(),
+        portal_refresh_token: a.portal_refresh_token.clone(),
+        portal_expires_at: a.portal_expires_at,
+        user_id: a.user_id,
+        synergia_login: a.synergia_login.clone(),
+        portal_email: a.portal_email.clone(),
+        portal_password: a.portal_password.clone(),
+        synergia_username: a.synergia_username.clone(),
+        synergia_password: a.synergia_password.clone(),
+        messages_session_id: a.messages_session_id.clone(),
+        messages_session_expiry: a.messages_session_expiry,
+        synergia_cookie: a.synergia_cookie.clone(),
+    }
+}

@@ -2,6 +2,9 @@
 /uiguidenew
 /uiguide
 /szkolny-android-temp
+/szkolny-android
 *.log
 *.json
 
+
+/.workbuddy-ai

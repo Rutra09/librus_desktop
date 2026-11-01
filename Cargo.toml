@@ -1,6 +1,6 @@
 [package]
 name = "librus-front"
-version = "0.4.0"
+version = "0.5.0"
 edition = "2021"
 
 
@@ -37,8 +37,20 @@ slint-build = "1.9"
 winres = "0.1.12"
 
 [profile.release]
-opt-level = "z"
+# Speed over size: the parsing and rendering this app does is the user's wait,
+# and "z" turns off vectorisation and inlining to save a couple of megabytes.
+opt-level = 3
 lto = true
 codegen-units = 1
 panic = "abort"
 strip = true
+
+# Dev builds: our own crate stays quick to rebuild, but everything it leans on
+# (serde, scraper, image, slint, reqwest) is compiled optimized. The startup
+# refresh spends most of its time parsing JSON/HTML, and unoptimized parsing is
+# roughly an order of magnitude slower — that was the bulk of the "loading…" wait.
+[profile.dev]
+opt-level = 1
+
+[profile.dev.package."*"]
+opt-level = 3
