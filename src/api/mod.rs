@@ -1,4 +1,5 @@
 pub mod constants;
+pub mod http;
 pub mod auth;
 pub mod client;
 pub mod endpoints;

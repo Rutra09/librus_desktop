@@ -3,6 +3,7 @@ use reqwest::Client;
 use reqwest::redirect::Policy;
 
 use super::constants::*;
+use super::http;
 
 /// Holds the current authentication state (tokens + expiry).
 #[derive(Debug, Clone)]
@@ -60,7 +61,7 @@ pub async fn login_portal(
     password: &str,
 ) -> Result<AuthState> {
     // Use a client that does NOT auto-follow redirects (we need to intercept them)
-    let client = Client::builder()
+    let client = http::builder()
         .user_agent(LIBRUS_USER_AGENT)
         .redirect(Policy::none())
         .cookie_store(true)
@@ -248,9 +249,7 @@ async fn exchange_code(
     ];
 
     // Use a new client that follows redirects for this request
-    let token_client = Client::builder()
-        .user_agent(LIBRUS_USER_AGENT)
-        .build()?;
+    let token_client = http::client();
 
     let response = token_client
         .post(LIBRUS_TOKEN_URL)
@@ -299,9 +298,7 @@ pub async fn refresh_portal_token(
         ("refresh_token", portal_refresh_token),
     ];
 
-    let client = Client::builder()
-        .user_agent(LIBRUS_USER_AGENT)
-        .build()?;
+    let client = http::client();
 
     let response = client
         .post(LIBRUS_TOKEN_URL)
@@ -340,9 +337,7 @@ async fn extract_synergia_token(
 ) -> Result<(String, String)> {
     let accounts_url = format!("{}{}", LIBRUS_PORTAL_URL, LIBRUS_ACCOUNTS_URL);
 
-    let client = Client::builder()
-        .user_agent(LIBRUS_USER_AGENT)
-        .build()?;
+    let client = http::client();
 
     let response = client
         .get(&accounts_url)
@@ -381,6 +376,65 @@ async fn extract_synergia_token(
         .context("Brak accessToken w koncie Synergia")?
         .to_string();
 
+    // The list carries the *cached* token, which may already be expired. Ask for
+    // a freshly minted one (the endpoint the Android client uses) and keep the
+    // cached value only as a fallback.
+    match fetch_fresh_account_token(portal_access_token, &login).await {
+        Ok((_, fresh)) => Ok((login, fresh)),
+        Err(e) => {
+            log::warn!("Świeży token Synergia niedostępny ({e}); używam tokena z listy kont");
+            Ok((login, access_token))
+        }
+    }
+}
+
+/// `GET /v3/SynergiaAccounts/fresh/{login}` — a token minted on the spot for one
+/// account.
+///
+/// `/v3/SynergiaAccounts` (the list) hands back whatever token the portal has
+/// cached. Calling that as a "refresh" can therefore return the same dead token
+/// that just failed, which is why a retry loop built on it looks like it does
+/// nothing. The Android reference calls this endpoint instead.
+async fn fetch_fresh_account_token(
+    portal_access_token: &str,
+    login: &str,
+) -> Result<(String, String)> {
+    let url = format!(
+        "{}{}/{}",
+        LIBRUS_PORTAL_URL,
+        LIBRUS_ACCOUNT_URL,
+        urlencoding::encode(login)
+    );
+
+    let response = http::client()
+        .get(&url)
+        .header("Authorization", format!("Bearer {}", portal_access_token))
+        .send()
+        .await
+        .context("Nie udało się pobrać świeżego tokena Synergia")?;
+
+    let status = response.status();
+    let body = response.text().await?;
+    let json: serde_json::Value = serde_json::from_str(&body)
+        .with_context(|| format!("SynergiaAccounts/fresh: nieprawidłowy JSON: {body}"))?;
+
+    if !status.is_success() {
+        let reason = json
+            .get("reason")
+            .or(json.get("message"))
+            .or(json.get("hint"))
+            .and_then(|v| v.as_str())
+            .unwrap_or("brak opisu");
+        bail!("SynergiaAccounts/fresh HTTP {}: {}", status.as_u16(), reason);
+    }
+
+    let access_token = json["accessToken"]
+        .as_str()
+        .context("Brak accessToken w odpowiedzi SynergiaAccounts/fresh")?
+        .to_string();
+
+    let login = json["login"].as_str().unwrap_or(login).to_string();
+
     Ok((login, access_token))
 }
 
@@ -399,15 +453,50 @@ pub async fn refresh_synergia_token(auth: &AuthState) -> Result<AuthState> {
         new_auth.portal_expires_at = now + portal_expires_in;
     }
 
-    // Use a client for portal API
-    let client = Client::builder()
-        .user_agent(LIBRUS_USER_AGENT)
-        .build()?;
+    // First choice: a token minted for this specific account.
+    //
+    // If the portal token was revoked (another device logged in, password
+    // changed) this answers 401 even though `is_portal_valid()` says otherwise,
+    // so refresh the portal token once and retry before giving up.
+    let mut fresh_err = None;
+    for attempt in 0..2 {
+        match fetch_fresh_account_token(&new_auth.portal_access_token, &auth.synergia_login).await {
+            Ok((login, access_token)) => {
+                new_auth.synergia_login = login;
+                new_auth.access_token = access_token;
+                new_auth.expires_at = now + 6 * 60 * 60;
+                return Ok(new_auth);
+            }
+            Err(e) => {
+                fresh_err = Some(e);
+                if attempt == 0 {
+                    match refresh_portal_token(&new_auth.portal_refresh_token).await {
+                        Ok((portal_access, portal_refresh, portal_expires_in)) => {
+                            new_auth.portal_access_token = portal_access;
+                            new_auth.portal_refresh_token = portal_refresh;
+                            new_auth.portal_expires_at = now + portal_expires_in;
+                        }
+                        Err(portal_err) => {
+                            log::warn!("Odświeżenie tokena portalu nie powiodło się: {portal_err}");
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+    }
 
-    // Get fresh Synergia token from SynergiaAccounts
+    log::warn!(
+        "SynergiaAccounts/fresh nie zadziałało ({}); próbuję listy kont",
+        fresh_err.map(|e| e.to_string()).unwrap_or_default()
+    );
+
+    // Fallback: the cached token from the account list. Kept because the fresh
+    // endpoint is the one that can be flaky, and a possibly-stale token still
+    // beats a hard failure — `api_get` retries once on `TokenIsExpired`.
     let accounts_url = format!("{}{}", LIBRUS_PORTAL_URL, LIBRUS_ACCOUNTS_URL);
 
-    let response = client
+    let response = http::client()
         .get(&accounts_url)
         .header(
             "Authorization",

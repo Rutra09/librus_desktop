@@ -7,6 +7,7 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 
 use super::auth::{self, AuthState};
 use super::constants::*;
+use super::http;
 
 /// How many HTTP requests this process has issued. Logged once per refresh, so a
 /// creeping N+1 shows up as a number instead of a feeling.
@@ -22,19 +23,21 @@ pub fn request_count() -> usize {
 pub struct LibrusClient {
     http: Client,
     auth: Arc<Mutex<AuthState>>,
+    /// Serialises the Synergia/messages handshake. `messages` and `homework`
+    /// both need a session and run at the same time; two concurrent
+    /// `AutoLoginToken` calls invalidate each other's DZIENNIKSID and burn the
+    /// portal's rate limit, which is how a refresh can end up with both of them
+    /// failing while every other source succeeded.
+    messages_login: Arc<Mutex<()>>,
 }
 
 impl LibrusClient {
     /// Create a new client from an existing auth state.
     pub fn new(auth: AuthState) -> Self {
-        let http = Client::builder()
-            .user_agent(LIBRUS_USER_AGENT)
-            .build()
-            .expect("Failed to create HTTP client");
-
         Self {
-            http,
+            http: http::client(),
             auth: Arc::new(Mutex::new(auth)),
+            messages_login: Arc::new(Mutex::new(())),
         }
     }
 
@@ -43,15 +46,17 @@ impl LibrusClient {
     /// Uses the Portal OAuth2 flow to obtain a Synergia API token.
     pub async fn login(email: &str, password: &str) -> Result<Self> {
         let auth = auth::login_portal(email, password).await?;
-        let http = Client::builder()
-            .user_agent(LIBRUS_USER_AGENT)
-            .build()
-            .expect("Failed to create HTTP client");
 
         Ok(Self {
-            http,
+            http: http::client(),
             auth: Arc::new(Mutex::new(auth)),
+            messages_login: Arc::new(Mutex::new(())),
         })
+    }
+
+    /// Replace the whole auth state (after a refresh or a re-login).
+    async fn set_auth(&self, new_auth: AuthState) {
+        *self.auth.lock().await = new_auth;
     }
 
     /// Ensure the access token is valid; refresh if needed.
@@ -404,56 +409,72 @@ impl LibrusClient {
     }
 
     /// Attempt to login to messages, refreshing tokens if needed.
+    ///
+    /// Recovery ladder, cheapest first: valid token → refreshed Synergia token
+    /// → full portal re-login. Each step is only tried when the failure could
+    /// actually be caused by the token (`MessagesAuthError::is_token_related`).
     pub async fn login_messages_with_retry(&self) -> Result<(String, String, i64)> {
-        let mut auth = self.auth.lock().await.clone();
-        
-        // Helper to update the locked state
-        let update_auth = |new_auth: AuthState| async {
-            let mut lock = self.auth.lock().await;
-            *lock = new_auth;
-        };
+        let _single_flight = self.messages_login.lock().await;
 
-        // Try 1: Just login
+        // Never hand an expired bearer token to `AutoLoginToken`. `ensure_token`
+        // refreshes it under the auth lock, so the clone below is always fresh —
+        // the previous code cloned the state as-is and posted whatever was on
+        // disk, which is exactly the case that produced "AutoLoginToken not
+        // found in response" while every other endpoint was working.
+        self.ensure_token().await?;
+        let mut auth = self.auth.lock().await.clone();
+
+        // Try 1: just login.
         match super::messages_auth::login_messages(&auth).await {
             Ok(res) => return Ok(res),
-            Err(e) => {
-                let err_str = e.to_string();
-                if !err_str.contains("AutoLoginToken not found") && !err_str.contains("TokenIsExpired") {
-                    return Err(e);
-                }
-                println!("[Client] Messages login failed ({}). Attempting refresh...", err_str);
-            }
+            Err(e) if !e.is_token_related() => return Err(e.into()),
+            Err(e) => log::warn!("[messages] handshake failed ({e}); refreshing Synergia token"),
         }
 
-        // Try 2: Refresh Synergia token
+        // Try 2: refresh the Synergia token through the portal.
         match auth::refresh_synergia_token(&auth).await {
             Ok(new_auth) => {
                 auth = new_auth.clone();
-                update_auth(new_auth).await;
-            }
-            Err(e) => {
-                println!("[Client] Synergia refresh failed: {}. Attempting full login...", e);
-                // Try 3: Full login with saved credentials
-                let email = auth.portal_email.clone();
-                let password = auth.portal_password.clone();
-                
-                if email.is_empty() || password.is_empty() {
-                    bail!("Cannot re-login: no saved credentials");
-                }
+                self.set_auth(new_auth).await;
+                self.persist_session(&auth).await;
 
-                let new_auth = auth::login_portal(&email, &password).await?;
-                // Preserve Synergia credentials if any
-                let mut final_auth = new_auth;
-                final_auth.synergia_username = auth.synergia_username.clone();
-                final_auth.synergia_password = auth.synergia_password.clone();
-                
-                auth = final_auth.clone();
-                update_auth(final_auth).await;
+                match super::messages_auth::login_messages(&auth).await {
+                    Ok(res) => return Ok(res),
+                    Err(e) if e.is_token_related() => {
+                        log::warn!("[messages] still failing after token refresh ({e}); full re-login");
+                    }
+                    Err(e) => return Err(e.into()),
+                }
             }
+            Err(e) => log::warn!("[messages] Synergia refresh failed ({e}); full re-login"),
         }
 
-        // Final retry
-        super::messages_auth::login_messages(&auth).await
+        // Try 3: full portal login with the saved credentials.
+        let email = auth.portal_email.clone();
+        let password = auth.portal_password.clone();
+
+        if email.is_empty() || password.is_empty() {
+            bail!("Cannot re-login: no saved credentials");
+        }
+
+        let mut new_auth = auth::login_portal(&email, &password).await?;
+        // Preserve the Synergia credentials the user typed in by hand.
+        new_auth.synergia_username = auth.synergia_username.clone();
+        new_auth.synergia_password = auth.synergia_password.clone();
+        auth = new_auth.clone();
+        self.set_auth(new_auth).await;
+        self.persist_session(&auth).await;
+
+        super::messages_auth::login_messages(&auth)
+            .await
+            .map_err(Into::into)
+    }
+
+    /// Write the auth state to disk, so the next start does not re-login.
+    async fn persist_session(&self, auth: &AuthState) {
+        if let Err(e) = crate::session::save_session(&crate::session::from_auth(auth)) {
+            log::warn!("Could not persist session: {e}");
+        }
     }
 
     /// Force refresh the messages session.

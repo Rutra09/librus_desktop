@@ -238,7 +238,6 @@ impl LibrusClient {
     /// Fetch messages from inbox using the XML API.
     /// Requires messages session to be initialized.
     pub async fn fetch_messages(&self) -> Result<Vec<super::models::Message>> {
-        use super::messages_auth;
         use super::models::{Message, MessageType};
         
         // Ensure messages session is valid

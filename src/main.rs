@@ -1410,8 +1410,10 @@ async fn refresh_all_data(client: LibrusClient, window_weak: slint::Weak<MainWin
     let t9 = tokio::spawn(timed("commute", fetch_jakdojade_commute(client.clone(), window_weak.clone(), state.clone())));
 
     
-    // Wait for all
-    tokio::join!(t1, t2, t3, t4, t5, t6, t7, t8, t9);
+    // Wait for all. Failures are already logged by `timed`'s callers; the join
+    // handles only report panics, which we deliberately ignore here so one bad
+    // source cannot abort the refresh.
+    let _ = tokio::join!(t1, t2, t3, t4, t5, t6, t7, t8, t9);
 
     perf::mark("all data ready");
     log::info!("[perf] {} HTTP requests this process", librus_front::api::client::request_count());
